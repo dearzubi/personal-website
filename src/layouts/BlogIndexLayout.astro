@@ -1,6 +1,7 @@
 ---
 import Footer from '@/components/Footer.astro';
 import Header from '@/components/Header.astro';
+import SearchDialog from '@/components/SearchDialog.astro';
 import BaseLayout from './BaseLayout.astro';
 
 type Props = { title: string; description?: string };
@@ -13,4 +14,5 @@ const { title, description } = Astro.props;
     <slot />
   </main>
   <Footer />
+  <SearchDialog />
 </BaseLayout>

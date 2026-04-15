@@ -1,0 +1,26 @@
+<dialog id="search-dialog" class="m-auto w-full max-w-2xl rounded-2xl border border-(--color-border) bg-(--color-background) p-0 shadow-xl backdrop:bg-black/50">
+  <div id="search" class="p-4"></div>
+</dialog>
+
+<script>
+  const dialog = document.getElementById('search-dialog') as HTMLDialogElement | null;
+  const container = document.getElementById('search');
+
+  let initialized = false;
+  async function init() {
+    if (initialized || !container) return;
+    initialized = true;
+    // @ts-expect-error — loaded at runtime from postbuild output
+    const pagefind = await import('/pagefind/pagefind-ui.js');
+    new pagefind.PagefindUI({ element: '#search', showSubResults: true });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      init();
+      dialog?.showModal();
+    }
+    if (e.key === 'Escape') dialog?.close();
+  });
+</script>

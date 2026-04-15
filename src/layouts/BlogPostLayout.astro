@@ -2,6 +2,7 @@
 import type { CollectionEntry } from 'astro:content';
 import Footer from '@/components/Footer.astro';
 import Header from '@/components/Header.astro';
+import SearchDialog from '@/components/SearchDialog.astro';
 import { dayjs } from '@/lib/dayjs';
 import BaseLayout from './BaseLayout.astro';
 
@@ -53,4 +54,5 @@ const { title, description, pubDate, updatedDate, tags } = post.data;
     )}
   </article>
   <Footer />
+  <SearchDialog />
 </BaseLayout>
