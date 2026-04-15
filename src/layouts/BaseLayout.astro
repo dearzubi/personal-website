@@ -29,6 +29,7 @@ const fullCanonical = canonical ?? new URL(Astro.url.pathname, siteUrl).toString
     <meta name="twitter:card" content="summary_large_image" />
     <Font cssVariable="--font-sans" preload />
     <Font cssVariable="--font-mono" preload />
+    <slot name="head" />
     <script is:inline>
       (() => {
         const stored = localStorage.getItem('theme');
