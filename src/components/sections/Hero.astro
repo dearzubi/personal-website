@@ -1,111 +1,171 @@
 ---
 import { Icon } from 'astro-icon/components';
 import { profile } from '@/data/site';
+import { getSkillIcon } from '@/lib/getSkillIcon';
 ---
 
-<section id="hero" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-  <div class="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
-    <div class="order-2 lg:order-1">
-      <h1 class="mb-6 flex flex-col text-5xl font-bold leading-tight lg:text-6xl xl:text-7xl">
-        <span>Hi, I'm </span>
-        <span class="bg-gradient-to-r from-sky-400 via-sky-500 to-sky-600 bg-clip-text text-transparent">
-          {profile.name}
-        </span>
-      </h1>
-
-      <h2 class="mb-6 text-xl font-medium text-(--color-muted-foreground) lg:text-2xl">
-        {profile.title}
-      </h2>
-
-      <p class="mb-8 max-w-lg text-lg leading-relaxed text-(--color-muted-foreground)">
-        {profile.blurb}
-      </p>
-
-      <div class="mb-10">
-        <h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-(--color-muted-foreground)">
-          Core Skills
-        </h3>
-        <div class="flex flex-wrap gap-3">
-          {profile.coreTechnologies.map((tech) => (
-            <span class="inline-flex rounded-full border border-(--color-border) bg-(--color-muted) px-3 py-1 text-sm">
-              {tech}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div class="mb-8">
-        <div class="flex flex-wrap items-center gap-4">
-          <a
-            href={profile.links.github}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium transition-colors hover:text-sky-500"
-            aria-label="GitHub (@dearzubi)"
-          >
-            <Icon name="lucide:github" class="size-5" />
-            @dearzubi
-          </a>
-
-          <a
-            href={profile.links.githubAlt}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium transition-colors hover:text-sky-500"
-            aria-label="GitHub (@coolpengwing)"
-          >
-            <Icon name="lucide:github" class="size-5" />
-            @coolpengwing
-          </a>
-
-          <a
-            href={profile.links.linkedin}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium transition-colors hover:text-sky-500"
-            aria-label="LinkedIn"
-          >
-            <Icon name="lucide:linkedin" class="size-5" />
-            zubair-khalid
-          </a>
-        </div>
-      </div>
-
-      <div class="mb-8 flex flex-col gap-4 sm:flex-row">
-        <a
-          href="/Zubair_Khalid_CV.pdf"
-          download="Zubair_Khalid_CV.pdf"
-          class="inline-flex items-center justify-center gap-2 rounded-xl bg-(--color-primary) px-6 py-3 text-sm font-semibold text-(--color-primary-foreground) shadow-lg transition-colors hover:opacity-90"
-        >
-          <Icon name="lucide:download" class="size-4" />
-          Download CV
-        </a>
-
-        <a
-          href="#contact"
-          class="inline-flex items-center justify-center rounded-xl border border-(--color-border) px-6 py-3 text-sm font-semibold transition-colors hover:border-sky-400 hover:text-sky-500"
-        >
-          Get In Touch
-        </a>
-      </div>
-
-      <p class="mt-4 italic text-(--color-muted-foreground)">
-        Legally authorised to work in the UK, no sponsorship required. Available for remote, hybrid, or Manchester-based roles.
-      </p>
+<section
+  id="home"
+  class="relative flex items-center justify-center overflow-hidden bg-white pt-24 dark:bg-gray-900"
+>
+  <!-- Subtle grid background -->
+  <div class="pointer-events-none absolute inset-0 overflow-hidden">
+    <div class="absolute inset-0 opacity-[0.08] dark:opacity-[0.12]">
+      <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+            <path
+              d="M 60 0 L 0 0 0 60"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="0.5"
+              class="text-gray-600 dark:text-gray-400"
+            ></path>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)"></rect>
+      </svg>
     </div>
+  </div>
 
-    <div class="order-1 flex justify-center lg:order-2 lg:justify-end">
-      <div class="relative h-80 w-80 lg:h-96 lg:w-96">
-        <div class="h-full w-full overflow-hidden rounded-full bg-gradient-to-br from-sky-200 to-sky-300 p-2 shadow-2xl">
-          <div class="h-full w-full overflow-hidden rounded-full bg-white">
-            <img
-              src="/dp.png"
-              alt={profile.name}
-              class="h-full w-full object-cover object-center"
-            />
+  <div class="relative z-10 mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
+      <!-- Left column: content -->
+      <div class="order-2 lg:order-1">
+        <h1 class="mb-6 flex flex-col text-5xl font-bold leading-tight lg:text-6xl xl:text-7xl">
+          <span class="text-gray-900 dark:text-gray-100">Hi, I'm </span>
+          <span
+            class="bg-gradient-to-r from-sky-400 via-sky-500 to-sky-600 bg-clip-text text-transparent"
+          >
+            {profile.name}
+          </span>
+        </h1>
+
+        <h2 class="mb-6 text-xl font-medium text-gray-700 dark:text-gray-300 lg:text-2xl">
+          {profile.title}
+        </h2>
+
+        <p class="mb-8 max-w-lg text-lg leading-relaxed text-gray-600 dark:text-gray-400">
+          {profile.blurb}
+        </p>
+
+        <!-- Core Skills -->
+        <div class="mb-10">
+          <h3
+            class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
+          >
+            Core Skills
+          </h3>
+          <div class="flex flex-wrap gap-3">
+            {
+              profile.coreTechnologies.map((skill) => (
+                <span class="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 transition-all duration-300 hover:bg-sky-50 hover:text-sky-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-sky-900/50 dark:hover:text-sky-400">
+                  <Icon name={getSkillIcon(skill)} class="size-4" />
+                  {skill}
+                </span>
+              ))
+            }
+          </div>
+        </div>
+
+        <!-- Social handles -->
+        <div class="mb-8">
+          <div class="flex flex-wrap items-center gap-4">
+            <a
+              href={profile.links.github}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center space-x-2 rounded-lg px-2 py-1 text-gray-600 transition-all duration-300 hover:scale-105 hover:text-sky-600 dark:text-gray-300 dark:hover:text-sky-400"
+              aria-label="GitHub (@dearzubi)"
+            >
+              <Icon name="lucide:github" class="h-5 w-5" />
+              <span class="text-sm font-medium">@dearzubi</span>
+            </a>
+
+            <a
+              href={profile.links.githubAlt}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center space-x-2 rounded-lg px-2 py-1 text-gray-600 transition-all duration-300 hover:scale-105 hover:text-sky-600 dark:text-gray-300 dark:hover:text-sky-400"
+              aria-label="GitHub (@coolpengwing)"
+            >
+              <Icon name="lucide:github" class="h-5 w-5" />
+              <span class="text-sm font-medium">@coolpengwing</span>
+            </a>
+
+            <a
+              href={profile.links.linkedin}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center space-x-2 rounded-lg px-2 py-1 text-gray-600 transition-all duration-300 hover:scale-105 hover:text-sky-600 dark:text-gray-300 dark:hover:text-sky-400"
+              aria-label="LinkedIn"
+            >
+              <Icon name="lucide:linkedin" class="h-5 w-5" />
+              <span class="text-sm font-medium">zubair-khalid</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- CTA buttons -->
+        <div class="mb-8 flex flex-col gap-4 sm:flex-row">
+          <a
+            href="/Zubair_Khalid_CV.pdf"
+            download="Zubair_Khalid_CV.pdf"
+            class="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-sky-600 hover:shadow-xl dark:bg-sky-600 dark:hover:bg-sky-700"
+          >
+            <Icon name="lucide:download" class="h-4 w-4" />
+            Download CV
+          </a>
+
+          <a
+            href="#contact"
+            class="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-700 transition-all duration-300 hover:border-sky-300 hover:text-sky-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-sky-500 dark:hover:text-sky-400"
+          >
+            Get In Touch
+          </a>
+        </div>
+
+        <!-- Legal blurb -->
+        <p class="mt-4 italic text-gray-500 dark:text-gray-400">
+          Legally authorised to work in the UK, no sponsorship required. Available for remote,
+          hybrid, or Manchester-based roles.
+        </p>
+      </div>
+
+      <!-- Right column: photo -->
+      <div class="order-1 flex justify-center lg:order-2 lg:justify-end">
+        <div class="relative">
+          <div class="relative h-80 w-80 lg:h-96 lg:w-96">
+            <div
+              class="hero-float h-full w-full overflow-hidden rounded-full bg-gradient-to-br from-sky-200 to-sky-300 p-2 shadow-2xl"
+            >
+              <div class="h-full w-full overflow-hidden rounded-full bg-white">
+                <img
+                  src="/dp.png"
+                  alt={profile.name}
+                  class="h-full w-full object-cover object-center"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 </section>
+
+<style>
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  .hero-float {
+    animation: float 4s ease-in-out infinite;
+  }
+</style>

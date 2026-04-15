@@ -54,9 +54,36 @@ importers:
       '@commitlint/types':
         specifier: ^20.5.0
         version: 20.5.0
+      '@iconify-json/devicon':
+        specifier: ^1.2.62
+        version: 1.2.62
+      '@iconify-json/logos':
+        specifier: ^1.2.11
+        version: 1.2.11
       '@iconify-json/lucide':
         specifier: ^1.2.102
         version: 1.2.102
+      '@iconify-json/material-icon-theme':
+        specifier: ^1.2.58
+        version: 1.2.58
+      '@iconify-json/mdi':
+        specifier: ^1.2.3
+        version: 1.2.3
+      '@iconify-json/simple-icons':
+        specifier: ^1.2.78
+        version: 1.2.78
+      '@iconify-json/skill-icons':
+        specifier: ^1.2.4
+        version: 1.2.4
+      '@iconify-json/tabler':
+        specifier: ^1.2.33
+        version: 1.2.33
+      '@iconify-json/token-branded':
+        specifier: ^1.2.40
+        version: 1.2.40
+      '@iconify-json/vscode-icons':
+        specifier: ^1.2.45
+        version: 1.2.45
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -492,8 +519,35 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@iconify-json/devicon@1.2.62':
+    resolution: {integrity: sha512-X0o0+fOJL2t5JTbDCGLRzrmvf8Pv5q8dr86+fW+F/VJ9qvXTtny6lqGIwjE9AY4VTLm3i8f/N+VtRheSW6OkEg==}
+
+  '@iconify-json/logos@1.2.11':
+    resolution: {integrity: sha512-fOo4pGEatuyuCFNL+cwquYMa2Im0oJHRHV7lt/Qqs5Ode/lPImHCQcfTtPzZj7qYMPb/h8YHN3TG54uEowrjNQ==}
+
   '@iconify-json/lucide@1.2.102':
     resolution: {integrity: sha512-Dm3EEqu5NrmzyDMB2U1+8yroEj2/dB9V4KlH0m/szwwF/ofSf0cPaGTZqkd1aExXjCor+vU53ttRMCGuXf+/cg==}
+
+  '@iconify-json/material-icon-theme@1.2.58':
+    resolution: {integrity: sha512-G+Xgd6myxrm+zRISSwgrU/6+I7j84qjdguNOEST2V/faow15/c6tmv2/pHxR9W2EYbVQznSk8sYa2Qk2zfEjpw==}
+
+  '@iconify-json/mdi@1.2.3':
+    resolution: {integrity: sha512-O3cLwbDOK7NNDf2ihaQOH5F9JglnulNDFV7WprU2dSoZu3h3cWH//h74uQAB87brHmvFVxIOkuBX2sZSzYhScg==}
+
+  '@iconify-json/simple-icons@1.2.78':
+    resolution: {integrity: sha512-I3lkNp0Qu7q2iZWkdcf/I2hqGhzK6qxdILh9T7XqowQrnpmG/BayDsiCf6PktDoWlW0U971xA5g+panm+NFrfQ==}
+
+  '@iconify-json/skill-icons@1.2.4':
+    resolution: {integrity: sha512-S6iRKHGlGCb/zfx3Isv1TBe5PunbDE5FEwJcaXji60+yRZMrcFFtYEI1xivKqaGKXyVZ508yjGDItsehQdJmSg==}
+
+  '@iconify-json/tabler@1.2.33':
+    resolution: {integrity: sha512-q9nUQfE/cjIrGh5bAKHTphitAZpT0kX9SxDgZo3Sx8ofeDTsaHVdRwrn+CfKiJ5vQ1b1btqVwizXzIgz9KEPjA==}
+
+  '@iconify-json/token-branded@1.2.40':
+    resolution: {integrity: sha512-gTWMaJ5pMfDH4wQJUQhjGwPhmObN6obLSfT09T2F1aER9Rrdykq0ODVsvboAekCC9ZkF7ZreqTLTgR/BW0UJZA==}
+
+  '@iconify-json/vscode-icons@1.2.45':
+    resolution: {integrity: sha512-ow+ueibMIq79ueM1kv6cOWgHx8jfh1XJQi2RrqMHb4HLbvIBlxpy5PCMvOJXlA68R6fBAHpWQeh6uWx7VKEVsA==}
 
   '@iconify/tools@4.2.0':
     resolution: {integrity: sha512-WRxPva/ipxYkqZd1+CkEAQmd86dQmrwH0vwK89gmp2Kh2WyyVw57XbPng0NehP3x4V1LzLsXUneP1uMfTMZmUA==}
@@ -3318,7 +3372,43 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
+  '@iconify-json/devicon@1.2.62':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/logos@1.2.11':
+    dependencies:
+      '@iconify/types': 2.0.0
+
   '@iconify-json/lucide@1.2.102':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/material-icon-theme@1.2.58':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/mdi@1.2.3':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/simple-icons@1.2.78':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/skill-icons@1.2.4':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/tabler@1.2.33':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/token-branded@1.2.40':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/vscode-icons@1.2.45':
     dependencies:
       '@iconify/types': 2.0.0
 
