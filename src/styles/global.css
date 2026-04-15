@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(222.2 84% 4.9%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222.2 84% 4.9%);
+  --color-primary: rgb(14 165 233);
+  --color-primary-foreground: rgb(255 255 255);
+  --color-secondary: rgb(156 163 175);
+  --color-secondary-foreground: rgb(17 24 39);
+  --color-muted: rgb(249 250 251);
+  --color-muted-foreground: rgb(107 114 128);
+  --color-accent: rgb(2 132 199);
+  --color-accent-foreground: rgb(255 255 255);
+  --color-border: hsl(214.3 31.8% 91.4%);
+  --color-ring: hsl(262 83% 58%);
+  --radius: 1rem;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+[data-theme="dark"] {
+  --color-background: hsl(222.2 84% 4.9%);
+  --color-foreground: hsl(210 40% 98%);
+  --color-card: hsl(222.2 84% 4.9%);
+  --color-card-foreground: hsl(210 40% 98%);
+  --color-primary: rgb(56 189 248);
+  --color-primary-foreground: rgb(17 24 39);
+  --color-secondary: rgb(107 114 128);
+  --color-secondary-foreground: rgb(249 250 251);
+  --color-muted: rgb(31 41 55);
+  --color-muted-foreground: rgb(156 163 175);
+  --color-accent: rgb(14 165 233);
+  --color-accent-foreground: rgb(17 24 39);
+  --color-border: hsl(217.2 32.6% 17.5%);
+  --color-ring: hsl(262 83% 68%);
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+  }
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
+  }
+}

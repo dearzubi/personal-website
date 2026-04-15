@@ -1,0 +1,44 @@
+---
+import '@/styles/global.css';
+import { Font } from 'astro:assets';
+
+type Props = {
+  title: string;
+  description?: string;
+  canonical?: string;
+  ogImage?: string;
+};
+
+const { title, description, canonical, ogImage } = Astro.props;
+const siteUrl = Astro.site?.toString() ?? '';
+const fullCanonical = canonical ?? new URL(Astro.url.pathname, siteUrl).toString();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="canonical" href={fullCanonical} />
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    <meta name="twitter:card" content="summary_large_image" />
+    <Font cssVariable="--font-sans" preload />
+    <Font cssVariable="--font-mono" preload />
+    <script is:inline>
+      (() => {
+        const stored = localStorage.getItem('theme');
+        const system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        const theme = stored === 'light' || stored === 'dark' ? stored : system;
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
