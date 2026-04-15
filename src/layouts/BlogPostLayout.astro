@@ -1,6 +1,7 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import Footer from '@/components/Footer.astro';
+import Giscus from '@/components/Giscus.astro';
 import Header from '@/components/Header.astro';
 import SearchDialog from '@/components/SearchDialog.astro';
 import { dayjs } from '@/lib/dayjs';
@@ -12,6 +13,12 @@ type Props = {
 };
 const { post, readingTime } = Astro.props;
 const { title, description, pubDate, updatedDate, tags } = post.data;
+
+const giscusRepo = import.meta.env.PUBLIC_GISCUS_REPO;
+const giscusRepoId = import.meta.env.PUBLIC_GISCUS_REPO_ID;
+const giscusCategory = import.meta.env.PUBLIC_GISCUS_CATEGORY;
+const giscusCategoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID;
+const giscusReady = giscusRepo && giscusRepoId && giscusCategory && giscusCategoryId;
 ---
 
 <BaseLayout title={title} description={description}>
@@ -51,6 +58,14 @@ const { title, description, pubDate, updatedDate, tags } = post.data;
         <p class="text-sm text-(--color-muted-foreground)">Part of series</p>
         <a href={`/blog/series/${post.data.series.id}`} class="font-semibold hover:text-(--color-primary)">View all posts in this series →</a>
       </aside>
+    )}
+    {giscusReady && (
+      <Giscus
+        repo={giscusRepo as `${string}/${string}`}
+        repoId={giscusRepoId}
+        category={giscusCategory}
+        categoryId={giscusCategoryId}
+      />
     )}
   </article>
   <Footer />
