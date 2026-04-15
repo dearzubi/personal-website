@@ -1,43 +1,45 @@
-# Astro Starter Kit: Minimal
+# personal-website
+
+Astro 6 personal site — portfolio at `/`, MDX blog at `/blog`.
+
+## Dev
+
+Requires Node 22+ and pnpm.
 
 ```sh
-pnpm create astro@latest -- --template minimal
+pnpm install
+pnpm dev
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Build
 
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+```sh
+pnpm build
+pnpm preview
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Deployment (Cloudflare Pages)
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+1. Push this repo to GitHub.
+2. In Cloudflare Pages dashboard, create a project, connect the repo.
+3. Build command: `pnpm build`
+4. Build output directory: `dist`
+5. Environment variables:
+   - `NODE_VERSION=22`
+   - `PUBLIC_GISCUS_REPO`, `PUBLIC_GISCUS_REPO_ID`, `PUBLIC_GISCUS_CATEGORY`, `PUBLIC_GISCUS_CATEGORY_ID` (get from https://giscus.app)
+6. Add custom domain via the Pages dashboard.
 
-Any static assets, like images, can be placed in the `public/` directory.
+## Writing a blog post
 
-## 🧞 Commands
+Drop a `.mdx` file in `src/content/blog/`:
 
-All commands are run from the root of the project, from a terminal:
+```mdx
+---
+title: My Post
+description: …
+pubDate: 2026-04-20
+tags: [typescript]
+---
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `pnpm install`             | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Post body in MDX…
+```
