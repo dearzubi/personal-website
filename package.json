@@ -16,10 +16,14 @@
     "astro": "astro",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.8",
+    "@astrojs/mdx": "^5.0.3",
+    "@astrojs/rss": "^4.0.18",
+    "@astrojs/sitemap": "^3.7.2",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.2",
     "astro": "^6.1.6",
@@ -34,6 +38,12 @@
     "@commitlint/config-conventional": "^20.5.0",
     "@commitlint/types": "^20.5.0",
     "@iconify-json/lucide": "^1.2.102",
-    "lefthook": "^2.1.5"
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^25.6.0",
+    "lefthook": "^2.1.5",
+    "mdast-util-to-string": "^4.0.0",
+    "reading-time": "^1.5.0",
+    "unist-util-visit": "^5.1.0",
+    "vitest": "^4.1.4"
   }
 }

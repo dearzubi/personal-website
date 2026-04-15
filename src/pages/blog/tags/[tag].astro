@@ -1,0 +1,31 @@
+---
+import BlogIndexLayout from '@/layouts/BlogIndexLayout.astro';
+import { getAllTags, getPostsByTag } from '@/lib/collections';
+import { dayjs } from '@/lib/dayjs';
+
+export async function getStaticPaths() {
+  const tags = await getAllTags();
+  return Promise.all(
+    tags.map(async (tag) => ({
+      params: { tag },
+      props: { tag, posts: await getPostsByTag(tag) },
+    })),
+  );
+}
+
+const { tag, posts } = Astro.props;
+---
+
+<BlogIndexLayout title={`#${tag}`}>
+  <h1 class="text-4xl font-bold">#{tag}</h1>
+  <ul class="mt-8 space-y-6">
+    {posts.map((post) => (
+      <li>
+        <a href={`/blog/${post.id}`} class="group block">
+          <h2 class="text-xl font-semibold group-hover:text-(--color-primary)">{post.data.title}</h2>
+          <p class="text-sm text-(--color-muted-foreground)">{dayjs(post.data.pubDate).format('MMM D, YYYY')}</p>
+        </a>
+      </li>
+    ))}
+  </ul>
+</BlogIndexLayout>

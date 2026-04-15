@@ -1,0 +1,23 @@
+---
+import BlogIndexLayout from '@/layouts/BlogIndexLayout.astro';
+import { getAllTags, getPostsByTag } from '@/lib/collections';
+
+const tags = await getAllTags();
+const counts = await Promise.all(
+  tags.map(async (t) => [t, (await getPostsByTag(t)).length] as const),
+);
+---
+
+<BlogIndexLayout title="Tags">
+  <h1 class="text-4xl font-bold">Tags</h1>
+  <ul class="mt-8 flex flex-wrap gap-3">
+    {counts.map(([tag, count]) => (
+      <li>
+        <a href={`/blog/tags/${tag}`} class="inline-flex items-center gap-2 rounded-full border border-(--color-border) px-4 py-2">
+          <span>#{tag}</span>
+          <span class="text-sm text-(--color-muted-foreground)">{count}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</BlogIndexLayout>

@@ -1,10 +1,20 @@
+import mdx from '@astrojs/mdx';
+import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, fontProviders } from 'astro/config';
 import icon from 'astro-icon';
+import { remarkReadingTime } from './src/lib/remark-reading-time';
 
 export default defineConfig({
   site: 'https://example.com', // placeholder; user updates before deploy
-  integrations: [icon()],
+  integrations: [icon(), mdx(), sitemap()],
+  markdown: {
+    remarkPlugins: [remarkReadingTime],
+    shikiConfig: {
+      themes: { light: 'github-light', dark: 'github-dark' },
+      defaultColor: false,
+    },
+  },
   vite: {
     plugins: [tailwindcss()],
   },

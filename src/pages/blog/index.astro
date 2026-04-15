@@ -1,0 +1,24 @@
+---
+import BlogIndexLayout from '@/layouts/BlogIndexLayout.astro';
+import { getBlogPosts } from '@/lib/collections';
+import { dayjs } from '@/lib/dayjs';
+
+const posts = await getBlogPosts();
+---
+
+<BlogIndexLayout title="Blog" description="Writing on software development and engineering.">
+  <h1 class="text-4xl font-bold">Blog</h1>
+  <ul class="mt-8 space-y-8">
+    {posts.map((post) => (
+      <li>
+        <a href={`/blog/${post.id}`} class="group block">
+          <h2 class="text-2xl font-semibold group-hover:text-(--color-primary)">{post.data.title}</h2>
+          <p class="mt-1 text-sm text-(--color-muted-foreground)">
+            {dayjs(post.data.pubDate).format('MMM D, YYYY')}
+          </p>
+          <p class="mt-2 text-(--color-foreground)">{post.data.description}</p>
+        </a>
+      </li>
+    ))}
+  </ul>
+</BlogIndexLayout>
