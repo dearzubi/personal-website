@@ -1,0 +1,32 @@
+---
+import { Icon } from 'astro-icon/components';
+import { education } from '@/data/site';
+---
+
+<section id="education" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+  <h2 class="text-3xl font-bold md:text-4xl">Education</h2>
+  <p class="mt-4 text-lg text-(--color-muted-foreground)">
+    My academic background and qualifications.
+  </p>
+
+  <div class="mt-12 grid grid-cols-1 gap-8 md:grid-cols-2">
+    {education.map((edu) => (
+      <article class="rounded-2xl border border-(--color-border) bg-(--color-card) p-8 shadow-sm">
+        <div class="mb-4 flex items-start gap-4">
+          <div class="rounded-full bg-sky-50 p-3 dark:bg-sky-900/30">
+            <Icon name="lucide:graduation-cap" class="size-6 text-sky-500" />
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold">{edu.degree}</h3>
+            <p class="mt-1 text-lg text-(--color-muted-foreground)">{edu.school}</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 text-(--color-muted-foreground)">
+          <Icon name="lucide:calendar" class="size-4 text-sky-500" />
+          {edu.dates}
+        </div>
+      </article>
+    ))}
+  </div>
+</section>
