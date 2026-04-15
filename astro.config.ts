@@ -1,8 +1,10 @@
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, fontProviders } from 'astro/config';
+import icon from 'astro-icon';
 
 export default defineConfig({
   site: 'https://example.com', // placeholder; user updates before deploy
+  integrations: [icon()],
   vite: {
     plugins: [tailwindcss()],
   },

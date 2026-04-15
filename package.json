@@ -23,6 +23,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.2",
     "astro": "^6.1.6",
+    "astro-icon": "^1.1.5",
     "dayjs": "^1.11.20",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2"
@@ -32,6 +33,7 @@
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@commitlint/types": "^20.5.0",
+    "@iconify-json/lucide": "^1.2.102",
     "lefthook": "^2.1.5"
   }
 }

@@ -1,0 +1,24 @@
+---
+import { Icon } from 'astro-icon/components';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-(--color-border) bg-(--color-background)">
+  <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6 lg:px-8">
+    <p class="text-sm text-(--color-muted-foreground)">
+      &copy; {year} Zubair Khalid.
+    </p>
+    <div class="flex items-center gap-4">
+      <a href="https://github.com/dearzubi" aria-label="GitHub" class="text-(--color-muted-foreground) hover:text-(--color-foreground)">
+        <Icon name="lucide:github" class="size-5" />
+      </a>
+      <a href="https://linkedin.com/in/mr-zubair-khalid" aria-label="LinkedIn" class="text-(--color-muted-foreground) hover:text-(--color-foreground)">
+        <Icon name="lucide:linkedin" class="size-5" />
+      </a>
+      <a href="/rss.xml" aria-label="RSS feed" class="text-(--color-muted-foreground) hover:text-(--color-foreground)">
+        <Icon name="lucide:rss" class="size-5" />
+      </a>
+    </div>
+  </div>
+</footer>

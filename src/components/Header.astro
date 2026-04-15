@@ -1,0 +1,32 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+
+const current = Astro.url.pathname;
+const navItems = [
+  { href: '/', label: 'Portfolio' },
+  { href: '/blog', label: 'Blog' },
+];
+---
+
+<header class="sticky top-0 z-40 border-b border-(--color-border) bg-(--color-background)/80 backdrop-blur">
+  <nav class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+    <a href="/" class="text-lg font-semibold">Zubair Khalid</a>
+    <div class="flex items-center gap-6">
+      {navItems.map((item) => {
+        const isActive = item.href === '/' ? current === '/' : current.startsWith(item.href);
+        return (
+          <a
+            href={item.href}
+            class:list={[
+              'text-sm font-medium transition-colors',
+              isActive ? 'text-(--color-primary)' : 'text-(--color-muted-foreground) hover:text-(--color-foreground)',
+            ]}
+          >
+            {item.label}
+          </a>
+        );
+      })}
+      <ThemeToggle />
+    </div>
+  </nav>
+</header>
