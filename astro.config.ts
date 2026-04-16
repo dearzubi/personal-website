@@ -6,9 +6,12 @@ import icon from 'astro-icon';
 import { siteUrl } from './src/data/site';
 import { remarkReadingTime } from './src/lib/remark-reading-time';
 
+import cloudflare from '@astrojs/cloudflare';
+
 export default defineConfig({
   site: siteUrl,
   integrations: [icon(), mdx(), sitemap()],
+
   markdown: {
     remarkPlugins: [remarkReadingTime],
     shikiConfig: {
@@ -16,6 +19,7 @@ export default defineConfig({
       defaultColor: false,
     },
   },
+
   vite: {
     plugins: [tailwindcss()],
     build: {
@@ -24,6 +28,7 @@ export default defineConfig({
       },
     },
   },
+
   fonts: [
     {
       provider: fontProviders.google(),
@@ -42,4 +47,6 @@ export default defineConfig({
       subsets: ['latin'],
     },
   ],
+
+  adapter: cloudflare(),
 });
