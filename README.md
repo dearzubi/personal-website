@@ -1,6 +1,6 @@
 # personal-website
 
-Astro 6 personal site — portfolio at `/`, MDX blog at `/blog`.
+Portfolio and blog
 
 ## Dev
 
