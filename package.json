@@ -12,16 +12,19 @@
     "dev": "astro dev",
     "build": "astro build",
     "postbuild": "pagefind --site dist",
-    "preview": "astro preview",
+    "preview": "pnpm run build && wrangler dev",
     "check": "astro check",
     "astro": "astro",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate-types": "wrangler types",
+    "deploy": "pnpm run build && wrangler deploy"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.8",
+    "@astrojs/cloudflare": "^13.1.10",
     "@astrojs/mdx": "^5.0.3",
     "@astrojs/rss": "^4.0.18",
     "@astrojs/sitemap": "^3.7.2",
@@ -56,11 +59,15 @@
     "reading-time": "^1.5.0",
     "sharp": "^0.34.5",
     "unist-util-visit": "^5.1.0",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "wrangler": "^4.83.0"
   },
   "pnpm": {
     "overrides": {
       "vite": "^7.3.2"
     }
+  },
+  "overrides": {
+    "vite": "^7"
   }
 }
