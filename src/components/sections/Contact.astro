@@ -3,9 +3,10 @@ import { Icon } from 'astro-icon/components';
 import { profile } from '@/data/site';
 ---
 
-<section id="contact" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-  <h2 class="text-3xl font-bold md:text-4xl">Get In Touch</h2>
-  <p class="mt-4 max-w-2xl text-lg text-(--color-muted-foreground)">
+<section id="contact" class="py-16">
+  <div class="section-container">
+  <h2 class="section-title">Get In Touch</h2>
+  <p class="section-subtitle">
     Have a question or want to work together? Feel free to reach out!
   </p>
 
@@ -20,84 +21,39 @@ import { profile } from '@/data/site';
           <p class="font-medium">Email</p>
           <a
             href={`mailto:${profile.email}`}
-            class="text-(--color-muted-foreground) transition-colors hover:text-sky-500"
+            class="text-muted-foreground transition-colors hover:text-sky-500"
           >
             {profile.email}
           </a>
         </div>
       </div>
 
-      <!-- Phone -->
-      <div class="flex items-center gap-4">
-        <div class="rounded-full bg-sky-50 p-3 dark:bg-sky-900/30">
-          <Icon name="lucide:phone" class="size-5 text-sky-500" />
-        </div>
-        <div>
-          <p class="font-medium">Phone</p>
-          <a
-            href={`tel:${profile.phone}`}
-            class="text-(--color-muted-foreground) transition-colors hover:text-sky-500"
-          >
-            {profile.phone}
-          </a>
-        </div>
-      </div>
-
-      <!-- Location -->
       <div class="flex items-center gap-4">
         <div class="rounded-full bg-sky-50 p-3 dark:bg-sky-900/30">
           <Icon name="lucide:map-pin" class="size-5 text-sky-500" />
         </div>
         <div>
           <p class="font-medium">Location</p>
-          <p class="text-(--color-muted-foreground)">{profile.location}</p>
+          <p class="text-muted-foreground">{profile.location}</p>
         </div>
       </div>
 
-      <!-- Right to Work -->
       <div class="flex items-center gap-4">
         <div class="rounded-full bg-sky-50 p-3 dark:bg-sky-900/30">
           <Icon name="lucide:file-check" class="size-5 text-sky-500" />
         </div>
         <div>
           <p class="font-medium">Right to Work</p>
-          <p class="text-(--color-muted-foreground)">{profile.rightToWork}</p>
+          <p class="text-muted-foreground">{profile.rightToWork}</p>
         </div>
       </div>
     </div>
 
-    <div class="mt-8 flex flex-wrap gap-4">
-      <a
-        href={`mailto:${profile.email}`}
-        class="inline-flex items-center gap-2 rounded-xl bg-(--color-primary) px-6 py-3 text-sm font-semibold text-(--color-primary-foreground) transition-opacity hover:opacity-90"
-      >
-        <Icon name="lucide:mail" class="size-4" />
-        {profile.email}
-      </a>
-      <a
-        href={profile.links.linkedin}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center gap-2 rounded-xl border border-(--color-border) px-6 py-3 text-sm font-semibold transition-colors hover:border-sky-400"
-      >
-        <Icon name="lucide:linkedin" class="size-4" />
-        LinkedIn
-      </a>
-      <a
-        href={profile.links.github}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center gap-2 rounded-xl border border-(--color-border) px-6 py-3 text-sm font-semibold transition-colors hover:border-sky-400"
-      >
-        <Icon name="lucide:github" class="size-4" />
-        GitHub
-      </a>
-    </div>
-
     <div class="flex w-full justify-center">
-      <p class="mt-4 italic text-(--color-muted-foreground)">
+      <p class="mt-4 italic text-muted-foreground">
         Legally entitled to work in the UK, no sponsorship required.
       </p>
     </div>
+  </div>
   </div>
 </section>

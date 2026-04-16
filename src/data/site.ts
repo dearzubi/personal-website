@@ -1,6 +1,8 @@
+export const siteUrl = 'https://dearzubair.dev';
+
 export const profile = {
   name: 'Zubair Khalid',
-  title: 'Full-Stack Software Developer',
+  title: 'Full Stack Software Developer',
   location: 'Manchester, UK',
   email: 'zubairkhalidce@gmail.com',
   phone: '+44 07859 010112',
@@ -100,7 +102,30 @@ export type ExperienceItem = {
 
 export const experience: ExperienceItem[] = [
   {
-    role: 'Full-Stack Developer',
+    role: 'Full Stack Engineer',
+    company: 'Paydock',
+    location: 'Remote, UK',
+    start: 'Feb 2026',
+    end: 'Apr 2026',
+    lines: [
+      {
+        value:
+          'Built an internal admin panel for a multi-tenant fintech platform with React, MUI, TypeScript, and Node.js, integrated with a NestJS backend.',
+        type: 'bullet',
+        subLines: [
+          {
+            value:
+              'Performed unit and integration tests with Vitest, React Testing Library, and Playwright.',
+            type: 'bullet',
+          },
+        ],
+      },
+    ],
+    note: 'Role ended due to a company-wide restructure (~80% head-count reduction).',
+    technologies: ['TypeScript', 'React', 'Node.js', 'NestJS', 'Vitest', 'Playwright'],
+  },
+  {
+    role: 'Full Stack Developer',
     company: 'Hulee LTD',
     location: 'Salford, Greater Manchester, UK',
     start: 'Oct 2025',
@@ -122,7 +147,7 @@ export const experience: ExperienceItem[] = [
             type: 'bullet',
           },
           {
-            value: 'Performed unit and integration testing using Jest and Supertest.',
+            value: 'Performed unit and integration testing using Vitest and Supertest.',
             type: 'bullet',
           },
           {
@@ -151,7 +176,7 @@ export const experience: ExperienceItem[] = [
     ],
   },
   {
-    role: 'Full-Stack Engineer',
+    role: 'Full Stack Engineer',
     company: 'Sage Studios AI',
     location: 'Remote',
     start: 'Aug 2024',
@@ -192,7 +217,8 @@ export const experience: ExperienceItem[] = [
             type: 'bullet',
           },
           {
-            value: 'Performed unit and integration testing using Mocha, Chai, and Supertest.',
+            value:
+              'Performed unit and integration testing using React Testing Library, Mocha, Chai, and Supertest.',
             type: 'bullet',
           },
         ],
@@ -286,7 +312,7 @@ export const experience: ExperienceItem[] = [
     ],
   },
   {
-    role: 'Full-Stack Freelancer',
+    role: 'Full Stack Freelancer',
     location: 'Remote',
     start: 'Apr 2023',
     end: 'Aug 2024',
@@ -395,12 +421,9 @@ export type Project = {
   name: string;
   description: string;
   stack: string[];
-  link?: string;
+  links?: string[];
   video?: string;
-  githubLink?: string | Array<{ url: string; label: string }>;
-  category?: string;
   image?: string;
-  isFeatured?: boolean;
 };
 
 export const projects: Project[] = [
@@ -417,28 +440,17 @@ export const projects: Project[] = [
       'Redis',
     ],
     image: '/projects/floagenticai/image_1.png',
-    link: 'https://www.floagenticai.com/',
-    githubLink: 'https://github.com/dearzubi/floagenticai',
-    category: 'Web App',
-    isFeatured: true,
+    links: ['https://www.floagenticai.com/', 'https://github.com/dearzubi/floagenticai'],
   },
   {
     name: 'Shift Manager',
     description: 'An employee rostering and shift management platform MVP.',
     stack: ['JavaScript', 'React', 'Node.js', 'MongoDB'],
-    category: 'Web App',
-    githubLink: [
-      {
-        url: 'https://github.com/dearzubi/orta-full-stack-dev-test-fe',
-        label: 'Frontend',
-      },
-      {
-        url: 'https://github.com/dearzubi/orta-full-stack-dev-test-be',
-        label: 'Backend',
-      },
+    links: [
+      'https://github.com/dearzubi/orta-full-stack-dev-test-fe',
+      'https://github.com/dearzubi/orta-full-stack-dev-test-be',
     ],
     image: '/projects/shift-manager/image_1.png',
-    isFeatured: true,
   },
   {
     name: 'Masjid 24/7',
@@ -446,16 +458,14 @@ export const projects: Project[] = [
       'Modernising how UK mosques share prayer timetables with seamless uploads, widgets, and real-time updates.',
     stack: ['TypeScript', 'React', 'Tailwind CSS'],
     image: '/projects/masjid247/image_1.png',
-    link: 'https://masjid247.com/',
-    category: 'Web App',
-    isFeatured: true,
+    links: ['https://masjid247.com/'],
   },
   {
     name: 'Poprofit',
     description: 'TikTok Shop profit calculator app from Excel sheets.',
     stack: ['TypeScript', 'React', 'Tailwind CSS', 'Node.js', 'Firebase', 'PayPal'],
     image: '/projects/poprofit/image_1.png',
-    link: 'https://poprofit.com/',
+    links: ['https://poprofit.com/'],
   },
   {
     name: 'Altar',
@@ -463,7 +473,7 @@ export const projects: Project[] = [
       'A low-code Web3 and AI automation platform to build smart workflows with LLMs and blockchain.',
     stack: ['TypeScript', 'React', 'Node.js', 'EVM', 'Solidity', 'LangGraph'],
     image: '/projects/altar/image_1.png',
-    link: 'https://sagestudios.ai/',
+    links: ['https://sagestudios.ai/'],
   },
   {
     name: 'Mura',
@@ -471,7 +481,7 @@ export const projects: Project[] = [
       'A global health and wellness platform connecting users with local trainers and experts to achieve their goals on their own terms.',
     stack: ['TypeScript', 'Firebase'],
     image: '/projects/mura/image_1.png',
-    link: 'https://www.mura.fit/',
+    links: ['https://www.mura.fit/'],
   },
 ];
 

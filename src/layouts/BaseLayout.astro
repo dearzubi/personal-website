@@ -1,6 +1,7 @@
 ---
 import '@/styles/global.css';
 import { Font } from 'astro:assets';
+import { siteUrl } from '@/data/site';
 
 type Props = {
   title: string;
@@ -10,8 +11,9 @@ type Props = {
 };
 
 const { title, description, canonical, ogImage } = Astro.props;
-const siteUrl = Astro.site?.toString() ?? '';
-const fullCanonical = canonical ?? new URL(Astro.url.pathname, siteUrl).toString();
+const origin = Astro.site?.toString() ?? siteUrl;
+const fullCanonical = canonical ?? new URL(Astro.url.pathname, origin).toString();
+const ogImageAbsolute = ogImage ? new URL(ogImage, origin).toString() : undefined;
 ---
 
 <!doctype html>
@@ -25,7 +27,7 @@ const fullCanonical = canonical ?? new URL(Astro.url.pathname, siteUrl).toString
     <link rel="canonical" href={fullCanonical} />
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}
-    {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogImageAbsolute && <meta property="og:image" content={ogImageAbsolute} />}
     <meta name="twitter:card" content="summary_large_image" />
     <Font cssVariable="--font-sans" preload />
     <Font cssVariable="--font-mono" preload />

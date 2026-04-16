@@ -7,19 +7,15 @@ const categories = Object.keys(skills) as Array<keyof typeof skills>;
 const firstCategory = categories[0];
 ---
 
-<section id="skills" class="bg-gray-50 py-24 dark:bg-gray-900">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-    <!-- Header -->
+<section id="skills" class="py-24">
+  <div class="section-container">
     <div class="mb-16 text-center">
-      <h2 class="mb-4 text-4xl font-bold text-gray-900 dark:text-gray-100 md:text-5xl">
-        Skills &amp; Technologies
-      </h2>
-      <p class="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
+      <h2 class="section-title">Skills &amp; Technologies</h2>
+      <p class="section-subtitle mx-auto text-center">
         A comprehensive overview of my technical expertise and the technologies I work with.
       </p>
     </div>
 
-    <!-- Category tabs -->
     <div
       id="skills-tablist"
       role="tablist"
@@ -37,7 +33,7 @@ const firstCategory = categories[0];
               aria-controls={`panel-${category}`}
               data-category={category}
               class:list={[
-                'chip-tab rounded-full px-6 py-3 text-sm font-medium transition-all duration-300',
+                'chip-tab cursor-pointer rounded-full px-6 py-3 text-sm font-medium transition-all duration-300',
                 isActive
                   ? 'bg-sky-500 text-white shadow-lg dark:bg-sky-600'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700',
@@ -60,7 +56,6 @@ const firstCategory = categories[0];
       }
     </div>
 
-    <!-- Skill panels — all rendered in DOM, toggled via JS -->
     {
       categories.map((category) => {
         const isActive = category === firstCategory;
@@ -89,7 +84,6 @@ const firstCategory = categories[0];
       })
     }
 
-    <!-- Footer -->
     <div class="mt-20 text-center">
       <p class="text-lg text-gray-600 dark:text-gray-400">
         Always learning and exploring new technologies to stay current with industry trends.
@@ -108,7 +102,6 @@ const firstCategory = categories[0];
       tab.addEventListener('click', () => {
         const target = tab.dataset.category;
 
-        // Update tab states
         tabs.forEach((t) => {
           const isSelected = t.dataset.category === target;
           t.setAttribute('aria-selected', isSelected ? 'true' : 'false');
@@ -123,7 +116,7 @@ const firstCategory = categories[0];
               'dark:text-gray-300',
               'dark:hover:bg-gray-700',
             );
-            // Update badge classes inside the button
+
             const badge = t.querySelector('span');
             if (badge) {
               badge.classList.add('bg-white/20', 'text-white');
@@ -157,7 +150,6 @@ const firstCategory = categories[0];
           }
         });
 
-        // Show / hide panels
         panels.forEach((panel) => {
           if (panel.dataset.category === target) {
             panel.classList.remove('hidden');

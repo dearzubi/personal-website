@@ -1,14 +1,15 @@
 ---
+import { Image } from 'astro:assets';
 import { Icon } from 'astro-icon/components';
+import dpImage from '@/assets/dp.jpeg';
 import { profile } from '@/data/site';
 import { getSkillIcon } from '@/lib/getSkillIcon';
 ---
 
 <section
   id="home"
-  class="relative flex items-center justify-center overflow-hidden bg-white pt-24 dark:bg-gray-900"
+  class="relative flex items-center justify-center overflow-hidden pt-8"
 >
-  <!-- Subtle grid background -->
   <div class="pointer-events-none absolute inset-0 overflow-hidden">
     <div class="absolute inset-0 opacity-[0.08] dark:opacity-[0.12]">
       <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
@@ -28,15 +29,12 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
     </div>
   </div>
 
-  <div class="relative z-10 mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+  <div class="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
     <div class="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
-      <!-- Left column: content -->
       <div class="order-2 lg:order-1">
         <h1 class="mb-6 flex flex-col text-5xl font-bold leading-tight lg:text-6xl xl:text-7xl">
           <span class="text-gray-900 dark:text-gray-100">Hi, I'm </span>
-          <span
-            class="bg-gradient-to-r from-sky-400 via-sky-500 to-sky-600 bg-clip-text text-transparent"
-          >
+          <span class="gradient-text">
             {profile.name}
           </span>
         </h1>
@@ -49,7 +47,6 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
           {profile.blurb}
         </p>
 
-        <!-- Core Skills -->
         <div class="mb-10">
           <h3
             class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
@@ -59,7 +56,7 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
           <div class="flex flex-wrap gap-3">
             {
               profile.coreTechnologies.map((skill) => (
-                <span class="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 transition-all duration-300 hover:bg-sky-50 hover:text-sky-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-sky-900/50 dark:hover:text-sky-400">
+                <span class="skill-chip gap-2">
                   <Icon name={getSkillIcon(skill)} class="size-4" />
                   {skill}
                 </span>
@@ -68,7 +65,6 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
           </div>
         </div>
 
-        <!-- Social handles -->
         <div class="mb-8">
           <div class="flex flex-wrap items-center gap-4">
             <a
@@ -106,33 +102,27 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
           </div>
         </div>
 
-        <!-- CTA buttons -->
         <div class="mb-8 flex flex-col gap-4 sm:flex-row">
           <a
             href="/Zubair_Khalid_CV.pdf"
             download="Zubair_Khalid_CV.pdf"
-            class="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-sky-600 hover:shadow-xl dark:bg-sky-600 dark:hover:bg-sky-700"
+            class="btn-primary gap-2"
           >
             <Icon name="lucide:download" class="h-4 w-4" />
             Download CV
           </a>
 
-          <a
-            href="#contact"
-            class="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-700 transition-all duration-300 hover:border-sky-300 hover:text-sky-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-sky-500 dark:hover:text-sky-400"
-          >
+          <a href="#contact" class="btn-secondary">
             Get In Touch
           </a>
         </div>
 
-        <!-- Legal blurb -->
         <p class="mt-4 italic text-gray-500 dark:text-gray-400">
           Legally authorised to work in the UK, no sponsorship required. Available for remote,
           hybrid, or Manchester-based roles.
         </p>
       </div>
 
-      <!-- Right column: photo -->
       <div class="order-1 flex justify-center lg:order-2 lg:justify-end">
         <div class="relative">
           <div class="relative h-80 w-80 lg:h-96 lg:w-96">
@@ -140,9 +130,13 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
               class="hero-float h-full w-full overflow-hidden rounded-full bg-gradient-to-br from-sky-200 to-sky-300 p-2 shadow-2xl"
             >
               <div class="h-full w-full overflow-hidden rounded-full bg-white">
-                <img
-                  src="/dp.png"
+                <Image
+                  src={dpImage}
                   alt={profile.name}
+                  widths={[320, 384, 768]}
+                  sizes="(min-width: 1024px) 24rem, 20rem"
+                  loading="eager"
+                  fetchpriority="high"
                   class="h-full w-full object-cover object-center"
                 />
               </div>
@@ -153,19 +147,3 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
     </div>
   </div>
 </section>
-
-<style>
-  @keyframes float {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-8px);
-    }
-  }
-
-  .hero-float {
-    animation: float 4s ease-in-out infinite;
-  }
-</style>

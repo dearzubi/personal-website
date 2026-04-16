@@ -13,7 +13,10 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props;
 const { Content, remarkPluginFrontmatter } = await render(post);
-const readingTime = remarkPluginFrontmatter.readingTime as string;
+const readingTime =
+  typeof remarkPluginFrontmatter.readingTime === 'string'
+    ? remarkPluginFrontmatter.readingTime
+    : '';
 ---
 
 <BlogPostLayout post={post} readingTime={readingTime}>

@@ -1,206 +1,123 @@
 ---
+import { Image } from 'astro:assets';
 import { Icon } from 'astro-icon/components';
 import { projects } from '@/data/site';
+import { getSkillIcon } from '@/lib/getSkillIcon';
 
-const featuredProjects = projects.filter((p) => p.isFeatured);
-const otherProjects = projects.filter((p) => !p.isFeatured);
+const projectImages = import.meta.glob<{ default: ImageMetadata }>(
+  '@/assets/projects/**/*.{png,jpg,jpeg,webp,avif}',
+  { eager: true },
+);
+
+const imageLookup = new Map<string, ImageMetadata>();
+for (const [path, mod] of Object.entries(projectImages)) {
+  const key = path.replace(/^.*\/assets\/projects\//, '/projects/');
+  imageLookup.set(key, mod.default);
+}
+
+function resolveImage(src: string | undefined): ImageMetadata | undefined {
+  if (!src) return undefined;
+  return imageLookup.get(src);
+}
+
+type LinkKind = 'github' | 'gitlab' | 'website';
+
+function classifyLink(url: string): LinkKind {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host === 'github.com' || host.endsWith('.github.com')) return 'github';
+    if (host === 'gitlab.com' || host.endsWith('.gitlab.com')) return 'gitlab';
+  } catch {
+    /* ignore parse failure, fall through */
+  }
+  return 'website';
+}
+
+const linkMeta: Record<LinkKind, { icon: string; label: string }> = {
+  github: { icon: 'lucide:github', label: 'Visit Code' },
+  gitlab: { icon: 'simple-icons:gitlab', label: 'Visit Code' },
+  website: { icon: 'lucide:globe', label: 'Visit Website' },
+};
 ---
 
-<section id="projects" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-  <h2 class="text-3xl font-bold md:text-4xl">Featured Projects</h2>
-  <p class="mt-4 text-lg text-(--color-muted-foreground)">
-    A selection of projects that showcase my skills in full-stack development and modern web technologies.
-  </p>
+<section id="projects" class="py-16">
+  <div class="section-container">
+    <h2 class="section-title">Projects</h2>
+    <p class="section-subtitle">
+      A selection of projects that showcase my skills in full-stack development and modern web
+      technologies.
+    </p>
 
-  <!-- Featured projects: alternating layout -->
-  <div class="mt-12 space-y-24">
-    {featuredProjects.map((project, index) => (
-      <div class={`grid grid-cols-1 items-center gap-16 lg:grid-cols-2`}>
-        <!-- Image column -->
-        <div class={index % 2 === 1 ? 'lg:order-2' : 'lg:order-1'}>
-          <div class="overflow-hidden rounded-2xl border border-(--color-border) bg-(--color-card) shadow-sm">
-            {project.image ? (
-              <img
-                src={project.image}
-                alt={project.name}
-                class="h-80 w-full object-cover rounded-2xl"
-              />
-            ) : (
-              <div class="flex h-80 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-50 to-sky-100">
-                <div class="flex h-24 w-24 items-center justify-center rounded-full bg-white shadow-lg">
-                  <span class="text-3xl font-bold text-sky-600">
-                    {project.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <!-- Content column -->
-        <div class={index % 2 === 1 ? 'lg:order-1' : 'lg:order-2'}>
-          {project.category && (
-            <span class="mb-4 inline-block rounded-full bg-sky-100 px-4 py-1 text-sm font-medium text-sky-700">
-              {project.category}
-            </span>
-          )}
-
-          <h3 class="mb-4 text-3xl font-bold md:text-4xl">{project.name}</h3>
-
-          <p class="mb-6 text-lg leading-relaxed text-(--color-muted-foreground)">
-            {project.description}
-          </p>
-
-          <div class="mb-8 flex flex-wrap gap-3">
-            {project.stack.slice(0, 10).map((tech) => (
-              <span class="inline-flex rounded-lg border border-(--color-border) bg-(--color-muted) px-3 py-2 text-sm">
-                {tech}
-              </span>
-            ))}
-            {project.stack.length > 10 && (
-              <span class="inline-flex rounded-lg border border-(--color-border) bg-(--color-muted) px-3 py-2 text-sm text-(--color-muted-foreground)">
-                +{project.stack.length - 10} more
-              </span>
-            )}
-          </div>
-
-          <div class="flex flex-wrap gap-4">
-            {project.link && (
-              <a
-                href={project.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 rounded-xl bg-(--color-primary) px-6 py-3 text-sm font-semibold text-(--color-primary-foreground) transition-opacity hover:opacity-90"
-              >
-                Visit Website
-                <Icon name="lucide:external-link" class="size-3" />
-              </a>
-            )}
-
-            {typeof project.githubLink === 'string' && (
-              <a
-                href={project.githubLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 rounded-xl border border-(--color-border) px-6 py-3 text-sm font-semibold transition-colors hover:border-sky-400"
-              >
-                <Icon name="lucide:github" class="size-4" />
-                View Code
-                <Icon name="lucide:external-link" class="size-3" />
-              </a>
-            )}
-
-            {Array.isArray(project.githubLink) && project.githubLink.map((repo) => (
-              <a
-                href={repo.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 rounded-xl border border-(--color-border) px-6 py-3 text-sm font-semibold transition-colors hover:border-sky-400"
-              >
-                <Icon name="lucide:github" class="size-4" />
-                {repo.label}
-                <Icon name="lucide:external-link" class="size-3" />
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-
-  <!-- Other projects: grid -->
-  {otherProjects.length > 0 && (
-    <div class="mt-24">
-      <h2 class="mb-12 text-center text-3xl font-bold md:text-4xl">More Projects</h2>
-
-      <div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-        {otherProjects.map((project) => (
-          <div class="group rounded-2xl border border-(--color-border) bg-(--color-card) p-8 shadow-sm transition-shadow hover:shadow-lg">
-            <div class="mb-6 overflow-hidden rounded-2xl">
-              {project.image ? (
-                <img
-                  src={project.image}
-                  alt={project.name}
-                  class="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                />
-              ) : (
-                <div class="flex h-48 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-50 to-sky-100">
-                  <div class="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-lg">
-                    <span class="text-2xl font-bold text-sky-600">
-                      {project.name.charAt(0).toUpperCase()}
-                    </span>
+    <div class="mt-12 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+      {
+        projects.map((project) => {
+          const projectImage = resolveImage(project.image);
+          return (
+            <div class="group flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-8 dark:border-gray-700 dark:bg-gray-800/90">
+              <div class="mb-6 overflow-hidden rounded-md">
+                {projectImage ? (
+                  <Image
+                    src={projectImage}
+                    alt={project.name}
+                    widths={[320, 480, 768]}
+                    sizes="(min-width: 1024px) 20rem, (min-width: 768px) 33vw, 100vw"
+                    class="h-48 w-full object-cover"
+                  />
+                ) : (
+                  <div class="flex h-48 items-center justify-center rounded-md bg-gradient-to-br from-sky-50 to-sky-100">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-white">
+                      <span class="text-2xl font-bold text-sky-600">
+                        {project.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
                   </div>
+                )}
+              </div>
+
+              <div class="flex flex-1 flex-col">
+                <h3 class="mb-3 text-xl font-bold">{project.name}</h3>
+
+                <p class="mb-4 text-muted-foreground">{project.description}</p>
+
+                <div class="mb-6 flex flex-wrap gap-2">
+                  {project.stack.slice(0, 10).map((tech) => (
+                    <span class="tech-tag inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs">
+                      <Icon name={getSkillIcon(tech)} class="size-3" />
+                      {tech}
+                    </span>
+                  ))}
+                  {project.stack.length > 10 && (
+                    <span class="tech-tag inline-flex rounded-lg px-2 py-1 text-xs">
+                      +{project.stack.length - 10}
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div class="flex flex-col">
-              {project.category && (
-                <span class="mb-3 inline-block w-fit rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700">
-                  {project.category}
-                </span>
-              )}
-
-              <h3 class="mb-3 text-xl font-bold transition-colors group-hover:text-sky-500">
-                {project.name}
-              </h3>
-
-              <p class="mb-4 text-(--color-muted-foreground)">{project.description}</p>
-
-              <div class="mb-6 flex flex-wrap gap-2">
-                {project.stack.slice(0, 10).map((tech) => (
-                  <span class="inline-flex rounded-lg border border-(--color-border) bg-(--color-muted) px-2 py-1 text-xs">
-                    {tech}
-                  </span>
-                ))}
-                {project.stack.length > 10 && (
-                  <span class="inline-flex rounded-lg border border-(--color-border) bg-(--color-muted) px-2 py-1 text-xs text-(--color-muted-foreground)">
-                    +{project.stack.length - 10}
-                  </span>
+                {project.links && project.links.length > 0 && (
+                  <div class="mt-auto flex flex-wrap gap-3">
+                    {project.links.map((url) => {
+                      const kind = classifyLink(url);
+                      const { icon, label } = linkMeta[kind];
+                      return (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="btn-secondary gap-2 px-4 py-2"
+                        >
+                          <Icon name={icon} class="size-4" />
+                          {label}
+                          <Icon name="lucide:external-link" class="size-3" />
+                        </a>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-
-              <div class="flex flex-wrap gap-3">
-                {project.link && (
-                  <a
-                    href={project.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-(--color-primary) px-4 py-2 text-sm font-semibold text-(--color-primary-foreground) transition-opacity hover:opacity-90"
-                  >
-                    Visit Website
-                    <Icon name="lucide:external-link" class="size-3" />
-                  </a>
-                )}
-
-                {typeof project.githubLink === 'string' && (
-                  <a
-                    href={project.githubLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-2 rounded-xl border border-(--color-border) px-4 py-2 text-sm font-semibold transition-colors hover:border-sky-400"
-                  >
-                    <Icon name="lucide:github" class="size-4" />
-                    View Code
-                  </a>
-                )}
-
-                {Array.isArray(project.githubLink) && project.githubLink.map((repo) => (
-                  <a
-                    href={repo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-2 rounded-xl border border-(--color-border) px-4 py-2 text-sm font-semibold transition-colors hover:border-sky-400"
-                  >
-                    <Icon name="lucide:github" class="size-4" />
-                    {repo.label}
-                  </a>
-                ))}
-              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          );
+        })
+      }
     </div>
-  )}
+  </div>
 </section>

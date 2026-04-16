@@ -18,12 +18,12 @@ const { series, posts } = Astro.props;
 
 <BlogIndexLayout title={series.data.title} description={series.data.description}>
   <h1 class="text-4xl font-bold">{series.data.title}</h1>
-  <p class="mt-4 text-lg text-(--color-muted-foreground)">{series.data.description}</p>
+  <p class="mt-4 text-lg text-muted-foreground">{series.data.description}</p>
   <ol class="mt-8 space-y-4">
     {posts.map((post, i) => (
       <li class="flex gap-4">
-        <span class="text-(--color-muted-foreground)">{(post.data.seriesOrder ?? i) + 1}.</span>
-        <a href={`/blog/${post.id}`} class="font-semibold hover:text-(--color-primary)">{post.data.title}</a>
+        <span class="text-muted-foreground">{(post.data.seriesOrder ?? i) + 1}.</span>
+        <a href={`/blog/${post.id}`} class="font-semibold hover:text-primary">{post.data.title}</a>
       </li>
     ))}
   </ol>

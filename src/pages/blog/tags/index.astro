@@ -1,11 +1,13 @@
 ---
 import BlogIndexLayout from '@/layouts/BlogIndexLayout.astro';
-import { getAllTags, getPostsByTag } from '@/lib/collections';
+import { getBlogPosts } from '@/lib/collections';
 
-const tags = await getAllTags();
-const counts = await Promise.all(
-  tags.map(async (t) => [t, (await getPostsByTag(t)).length] as const),
-);
+const posts = await getBlogPosts();
+const tally = new Map<string, number>();
+for (const post of posts) {
+  for (const tag of post.data.tags) tally.set(tag, (tally.get(tag) ?? 0) + 1);
+}
+const counts = [...tally.entries()].sort(([a], [b]) => a.localeCompare(b));
 ---
 
 <BlogIndexLayout title="Tags">
@@ -13,9 +15,9 @@ const counts = await Promise.all(
   <ul class="mt-8 flex flex-wrap gap-3">
     {counts.map(([tag, count]) => (
       <li>
-        <a href={`/blog/tags/${tag}`} class="inline-flex items-center gap-2 rounded-full border border-(--color-border) px-4 py-2">
+        <a href={`/blog/tags/${encodeURIComponent(tag)}`} class="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2">
           <span>#{tag}</span>
-          <span class="text-sm text-(--color-muted-foreground)">{count}</span>
+          <span class="text-sm text-muted-foreground">{count}</span>
         </a>
       </li>
     ))}

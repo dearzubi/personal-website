@@ -12,40 +12,46 @@ type Props = {
   readingTime: string;
 };
 const { post, readingTime } = Astro.props;
-const { title, description, pubDate, updatedDate, tags } = post.data;
+const { title, description, pubDate, updatedDate, tags, heroImage } = post.data;
+const baseProps = { title, description, ...(heroImage && { ogImage: heroImage.src }) };
 
-const giscusRepo = import.meta.env.PUBLIC_GISCUS_REPO;
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: title,
+  datePublished: pubDate.toISOString(),
+  dateModified: (updatedDate ?? pubDate).toISOString(),
+  author: { '@type': 'Person', name: 'Zubair Khalid' },
+  description,
+}).replace(/</g, '\\u003c');
+
+const rawGiscusRepo = import.meta.env.PUBLIC_GISCUS_REPO ?? '';
+const giscusRepo = /^[^/\s]+\/[^/\s]+$/.test(rawGiscusRepo)
+  ? (rawGiscusRepo as `${string}/${string}`)
+  : null;
 const giscusRepoId = import.meta.env.PUBLIC_GISCUS_REPO_ID;
 const giscusCategory = import.meta.env.PUBLIC_GISCUS_CATEGORY;
 const giscusCategoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID;
 const giscusReady = giscusRepo && giscusRepoId && giscusCategory && giscusCategoryId;
 ---
 
-<BaseLayout title={title} description={description}>
-  <script is:inline type="application/ld+json" slot="head" set:html={JSON.stringify({
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
-    headline: title,
-    datePublished: pubDate.toISOString(),
-    dateModified: (updatedDate ?? pubDate).toISOString(),
-    author: { '@type': 'Person', name: 'Zubair Khalid' },
-    description,
-  })} />
+<BaseLayout {...baseProps}>
+  <script is:inline type="application/ld+json" slot="head" set:html={jsonLd} />
   <Header />
   <article class="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
     <header class="mb-8">
       <h1 class="text-4xl font-bold md:text-5xl">{title}</h1>
-      <p class="mt-3 text-sm text-(--color-muted-foreground)">
+      <p class="mt-3 text-sm text-muted-foreground">
         <time datetime={pubDate.toISOString()}>{dayjs(pubDate).format('MMM D, YYYY')}</time>
         {updatedDate && (
           <span> · Updated <time datetime={updatedDate.toISOString()}>{dayjs(updatedDate).format('MMM D, YYYY')}</time></span>
         )}
-        <span> · {readingTime}</span>
+        {readingTime && <span> · {readingTime}</span>}
       </p>
       {tags.length > 0 && (
         <div class="mt-4 flex flex-wrap gap-2">
           {tags.map((tag) => (
-            <a href={`/blog/tags/${tag}`} class="inline-flex rounded-full border border-(--color-border) px-3 py-1 text-xs">#{tag}</a>
+            <a href={`/blog/tags/${encodeURIComponent(tag)}`} class="inline-flex rounded-full border border-border px-3 py-1 text-xs">#{tag}</a>
           ))}
         </div>
       )}
@@ -54,14 +60,14 @@ const giscusReady = giscusRepo && giscusRepoId && giscusCategory && giscusCatego
       <slot />
     </div>
     {post.data.series && (
-      <aside class="mt-12 rounded-2xl border border-(--color-border) p-6">
-        <p class="text-sm text-(--color-muted-foreground)">Part of series</p>
-        <a href={`/blog/series/${post.data.series.id}`} class="font-semibold hover:text-(--color-primary)">View all posts in this series →</a>
+      <aside class="mt-12 rounded-2xl border border-border p-6">
+        <p class="text-sm text-muted-foreground">Part of series</p>
+        <a href={`/blog/series/${post.data.series.id}`} class="font-semibold hover:text-primary">View all posts in this series →</a>
       </aside>
     )}
     {giscusReady && (
       <Giscus
-        repo={giscusRepo as `${string}/${string}`}
+        repo={giscusRepo}
         repoId={giscusRepoId}
         category={giscusCategory}
         categoryId={giscusCategoryId}

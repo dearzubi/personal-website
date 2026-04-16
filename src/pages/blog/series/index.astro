@@ -11,8 +11,8 @@ const seriesList = await getCollection('series');
     {seriesList.map((s) => (
       <li>
         <a href={`/blog/series/${s.id}`} class="group block">
-          <h2 class="text-xl font-semibold group-hover:text-(--color-primary)">{s.data.title}</h2>
-          <p class="text-(--color-muted-foreground)">{s.data.description}</p>
+          <h2 class="text-xl font-semibold group-hover:text-primary">{s.data.title}</h2>
+          <p class="text-muted-foreground">{s.data.description}</p>
         </a>
       </li>
     ))}

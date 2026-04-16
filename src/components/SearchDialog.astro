@@ -1,26 +1,173 @@
-<dialog id="search-dialog" class="m-auto w-full max-w-2xl rounded-2xl border border-(--color-border) bg-(--color-background) p-0 shadow-xl backdrop:bg-black/50">
+---
+import { Icon } from 'astro-icon/components';
+---
+
+<dialog
+  id="search-dialog"
+  class="m-auto w-full max-w-2xl rounded-2xl border border-border bg-background p-0 shadow-xl backdrop:bg-black/50"
+>
+  <div class="flex items-center justify-between border-b border-border px-4 py-3">
+    <div class="flex items-center gap-2 text-sm font-medium text-foreground">
+      <Icon name="lucide:search" class="size-4" />
+      Search blog
+    </div>
+    <button
+      type="button"
+      data-search-close
+      aria-label="Close search"
+      class="flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+    >
+      <span>Esc</span>
+      <Icon name="lucide:x" class="size-3" />
+    </button>
+  </div>
+
   <div id="search" class="p-4"></div>
+
+  <div
+    class="flex items-center justify-end gap-3 border-t border-border px-4 py-2 text-xs text-muted-foreground"
+  >
+    <span class="flex items-center gap-1">
+      <kbd class="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">
+        ↵
+      </kbd>
+      open
+    </span>
+    <span class="flex items-center gap-1">
+      <kbd class="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">
+        Esc
+      </kbd>
+      close
+    </span>
+  </div>
 </dialog>
 
 <script>
   const dialog = document.getElementById('search-dialog') as HTMLDialogElement | null;
   const container = document.getElementById('search');
 
-  let initialized = false;
-  async function init() {
-    if (initialized || !container) return;
-    initialized = true;
-    // @ts-expect-error — loaded at runtime from postbuild output
-    const pagefind = await import('/pagefind/pagefind-ui.js');
-    new pagefind.PagefindUI({ element: '#search', showSubResults: true });
+  function loadStylesheet(href: string) {
+    if (document.querySelector(`link[href="${href}"]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }
+
+  function loadScript(src: string) {
+    return new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') resolve();
+        else existing.addEventListener('load', () => resolve(), { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.addEventListener(
+        'load',
+        () => {
+          script.dataset.loaded = 'true';
+          resolve();
+        },
+        { once: true },
+      );
+      script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), {
+        once: true,
+      });
+      document.head.appendChild(script);
+    });
+  }
+
+  let initPromise: Promise<void> | null = null;
+  function init() {
+    if (initPromise) return initPromise;
+    if (!container) return Promise.resolve();
+    initPromise = (async () => {
+      loadStylesheet('/pagefind/pagefind-ui.css');
+      await loadScript('/pagefind/pagefind-ui.js');
+      // @ts-expect-error — set on window by pagefind-ui.js
+      const PagefindUI = window.PagefindUI;
+      if (!PagefindUI) return;
+      new PagefindUI({ element: '#search', showSubResults: true });
+    })();
+    return initPromise;
+  }
+
+  function getSearchInput(): HTMLInputElement | null {
+    return dialog?.querySelector<HTMLInputElement>('#search input[type="text"], #search input:not([type])') ?? null;
+  }
+
+  function focusSearchInput() {
+    const attempt = (remaining: number) => {
+      const input = getSearchInput();
+      if (input) {
+        input.focus();
+        input.select();
+        return;
+      }
+      if (remaining > 0) requestAnimationFrame(() => attempt(remaining - 1));
+    };
+    attempt(30);
+  }
+
+  async function openDialog() {
+    dialog?.showModal();
+    await init();
+    focusSearchInput();
+  }
+
+  function closeDialog() {
+    dialog?.close();
   }
 
   window.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
-      init();
-      dialog?.showModal();
+      openDialog();
     }
-    if (e.key === 'Escape') dialog?.close();
+    if (e.key === 'Escape') closeDialog();
+  });
+
+  document.querySelectorAll('[data-search-trigger]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      openDialog();
+    });
+  });
+
+  dialog?.querySelector('[data-search-close]')?.addEventListener('click', () => closeDialog());
+
+  dialog?.addEventListener('click', (e) => {
+    if (e.target === dialog) closeDialog();
+  });
+
+  // Arrow-key navigation between results + Enter to navigate
+  dialog?.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const links = Array.from(
+      dialog.querySelectorAll<HTMLAnchorElement>('.pagefind-ui__result-link'),
+    );
+    if (links.length === 0) return;
+
+    const input = getSearchInput();
+    const active = document.activeElement as HTMLElement | null;
+    const currentIndex = active instanceof HTMLAnchorElement ? links.indexOf(active) : -1;
+
+    e.preventDefault();
+
+    if (e.key === 'ArrowDown') {
+      if (active === input || currentIndex === -1) {
+        links[0]?.focus();
+      } else {
+        links[Math.min(currentIndex + 1, links.length - 1)]?.focus();
+      }
+    } else {
+      if (currentIndex <= 0) {
+        input?.focus();
+      } else {
+        links[currentIndex - 1]?.focus();
+      }
+    }
   });
 </script>

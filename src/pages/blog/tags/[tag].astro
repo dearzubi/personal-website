@@ -22,8 +22,8 @@ const { tag, posts } = Astro.props;
     {posts.map((post) => (
       <li>
         <a href={`/blog/${post.id}`} class="group block">
-          <h2 class="text-xl font-semibold group-hover:text-(--color-primary)">{post.data.title}</h2>
-          <p class="text-sm text-(--color-muted-foreground)">{dayjs(post.data.pubDate).format('MMM D, YYYY')}</p>
+          <h2 class="text-xl font-semibold group-hover:text-primary">{post.data.title}</h2>
+          <p class="text-sm text-muted-foreground">{dayjs(post.data.pubDate).format('MMM D, YYYY')}</p>
         </a>
       </li>
     ))}

@@ -3,10 +3,11 @@ import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, fontProviders } from 'astro/config';
 import icon from 'astro-icon';
+import { siteUrl } from './src/data/site';
 import { remarkReadingTime } from './src/lib/remark-reading-time';
 
 export default defineConfig({
-  site: 'https://example.com', // placeholder; user updates before deploy
+  site: siteUrl,
   integrations: [icon(), mdx(), sitemap()],
   markdown: {
     remarkPlugins: [remarkReadingTime],

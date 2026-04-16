@@ -1,0 +1,27 @@
+---
+import type { ExperienceLine } from '@/data/site';
+
+type Props = { lines: ExperienceLine[]; nested?: boolean };
+const { lines, nested = false } = Astro.props;
+const listClass = nested ? 'mt-1 ml-6 space-y-1' : 'mt-2 space-y-2';
+---
+
+<ul class={listClass}>
+  {lines.map((line) => (
+    <>
+      {line.type === 'heading' && (
+        <li class="mt-4 font-semibold">{line.value}</li>
+      )}
+      {line.type === 'bullet' && (
+        <li class="flex items-start gap-2">
+          <span class="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-sky-500"></span>
+          <span>{line.value}</span>
+        </li>
+      )}
+      {line.type === 'text' && <li>{line.value}</li>}
+      {line.subLines && line.subLines.length > 0 && (
+        <Astro.self lines={line.subLines} nested />
+      )}
+    </>
+  ))}
+</ul>
