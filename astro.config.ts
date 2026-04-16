@@ -1,3 +1,4 @@
+import cloudflare from '@astrojs/cloudflare';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
@@ -5,8 +6,6 @@ import { defineConfig, fontProviders } from 'astro/config';
 import icon from 'astro-icon';
 import { siteUrl } from './src/data/site';
 import { remarkReadingTime } from './src/lib/remark-reading-time';
-
-import cloudflare from '@astrojs/cloudflare';
 
 export default defineConfig({
   site: siteUrl,
@@ -48,5 +47,5 @@ export default defineConfig({
     },
   ],
 
-  adapter: cloudflare(),
+  adapter: cloudflare({ imageService: 'compile' }),
 });
