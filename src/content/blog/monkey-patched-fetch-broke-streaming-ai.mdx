@@ -1,0 +1,162 @@
+---
+title: 'The day a monkey-patched fetch broke our streaming AI pipeline'
+description: 'A silently replaced global fetch turned an AI SDK integration into a ghost bug. How it happened, why pipeThrough was suddenly not a function, and a pnpm patch that fixed it.'
+pubDate: 2026-04-17
+tags: ['node.js', 'javascript', 'debugging', 'fetch', 'undici', 'ai', 'llm']
+---
+
+Our integration with the Google Gen AI SDK looked completely fine. Requests were going out, responses were coming back, `fetch` was available as a global. Then the streaming path lit up in production, and the stack trace pointed somewhere I didn't expect:
+
+```
+TypeError: response.body.pipeThrough is not a function
+```
+
+Thrown from deep inside the SDK. Not from our code. Not from anything we had touched in weeks. Just a friendly message suggesting that a method defined in the Web Streams specification had simply ceased to exist.
+
+This is the story of how I spent a few days convinced the problem was in the SDK, when the actual culprit was a harmless-looking shim that had been sitting in the project for months. The fix, once we found it, was about three lines. Getting there required being wrong in public a few times first.
+
+## What we were actually doing
+
+The system was event driven. An event arrived, triggered an LLM call through the Google Gen AI SDK, and the response streamed back token by token to downstream consumers. Streaming matters here because users notice. Waiting five seconds for a blob of text feels slow. Watching the same five seconds of text appear as it is generated feels responsive, even though the total time is identical.
+
+Internally, a streaming LLM call in a modern Node app looks roughly like this:
+
+```ts
+const response = await fetch(url, init);
+for await (const chunk of response.body.pipeThrough(new TextDecoderStream())) {
+  // handle tokens
+}
+```
+
+That second line is the one that matters for this story. `response.body` is a `ReadableStream`, and `pipeThrough` is how you transform it, for example decoding bytes into text as they arrive. Every well-behaved web streams consumer does something in that shape.
+
+Ours did too. It just happened to throw.
+
+## What Node's `fetch` is actually made of
+
+Node.js ships with a native `fetch` now. You can call it without importing anything. Under the hood, `globalThis.fetch` is wired to <a href="https://github.com/nodejs/undici" target="_blank" rel="noopener noreferrer">Undici</a>, the HTTP client that lives inside Node core. Undici's `Response` exposes `body` as a proper `ReadableStream`, the one from the Web Streams spec, which is the same interface browsers implement. That's why `response.body.pipeThrough(...)` works.
+
+If you squint, you would expect `fetch` in Node to behave identically to `fetch` in the browser. Mostly, it does. But "mostly" is where the bug lives.
+
+A spec-compliant `Response.body` is a `ReadableStream` with `getReader`, `pipeThrough`, `pipeTo`, `tee`, and `[Symbol.asyncIterator]`. Before native `fetch` existed in Node, plenty of libraries stepped in to polyfill it globally. `node-fetch` and its cousins were the usual choice. Their `Response.body` is not a `ReadableStream`. It is a Node `stream.Readable`, which is a different object with different methods. You can iterate it, you can pipe it, but you cannot call `pipeThrough` on it, because that method does not exist on Node's stream type.
+
+As long as your code does `await res.text()` or `await res.json()`, you never notice. The polyfill implements enough of the surface for the common path. Only when a caller reaches for `response.body.pipeThrough` does the floor give way.
+
+## Why we only hit it now
+
+The obvious question at this point is: if a shim was replacing `fetch` for months, why did we not notice earlier? Streaming should have broken from day one.
+
+It didn't, because we weren't streaming from day one. The earlier version of this feature was a prototype that just awaited full LLM responses and handed the finished text to consumers. That path only ever calls `await response.text()` or `await response.json()`, and both of those work perfectly well on the polyfilled `Response`. The polyfill was wrong, but in a way, nothing we did mattered.
+
+The moment we moved to token-by-token streaming, we started asking the response for parts of the spec the polyfill didn't implement. The shim had been silently broken for the whole life of the feature. It only started failing when a caller finally looked in the right place.
+
+## How the patch got there
+
+Here is the part that took the longest to accept. I could not find the dependency that was overwriting `fetch`. I checked our direct dependencies. None of them touched the global. I grepped our source code. Nothing. I tried to set a breakpoint on the assignment to `globalThis.fetch`, which is the correct move in theory and entirely impractical when your dependency graph has a few hundred transitive packages and half of them lazy-load at boot.
+
+My best guess, which I still cannot prove, is that a transitive dependency we had picked up a while back carried a module side effect at import time doing something like:
+
+```js
+if (!globalThis.fetch) {
+  globalThis.fetch = require('some-polyfill');
+}
+```
+
+Which is already a little iffy, because once Node's native `fetch` landed, the condition silently stopped applying, and newer code started relying on globals that looked right from a distance. But some of these libraries kept the assignment unconditional. A few went further and actively replaced a working native implementation with their older polyfill.
+
+For a while I was convinced Google had shipped a regression in their SDK. This is the debugger's version of blaming the weather. A clean Node project with just the SDK installed worked perfectly. The streaming call returned, `response.body.pipeThrough` existed, life was fine. Back in our codebase, same SDK version, same call, thrown error. The only variable was everything else.
+
+That is usually the shape of the problem. When "it works in isolation but breaks in context," the context is the bug.
+
+## Noticing that `fetch` is not `fetch`
+
+Once I accepted that the SDK was innocent, the check was almost embarrassing in its simplicity:
+
+```ts
+import { fetch as undiciFetch } from 'undici';
+
+const ours = await fetch('https://example.com');
+const theirs = await undiciFetch('https://example.com');
+
+console.log(typeof ours.body?.pipeThrough);   // 'undefined' on the patched version
+console.log(typeof theirs.body?.pipeThrough); // 'function'
+```
+
+There it was. Someone had quietly swapped the global, and we had been happily using their version for months.
+
+If you are ever debugging something like this, that side-by-side comparison is a useful smoke test. Undici's `fetch` is always spec-compliant. When the global version returns a `Response` whose `body` is missing Web Streams methods, something in your dependency tree has opinions.
+
+## The fix
+
+Once we understood the cause, the fix needed to do two things. First, make sure the Google SDK never touched the global `fetch`, because we could not trust it. Second, not boil the ocean trying to find and excise whatever dependency was doing the patching.
+
+The pragmatic answer was to install `undici` as a direct dependency and force the SDK to import `fetch` from it:
+
+```sh
+pnpm add undici
+```
+
+Then patch the SDK with pnpm:
+
+```sh
+pnpm patch @google/genai
+```
+
+pnpm drops you into a scratch copy of the package. The change itself is small. Wherever the SDK reaches for `fetch`, make it reach for Undici instead.
+
+Before the diff, a small disclaimer: the snippet below is illustrative, not the actual patch we shipped. I do not remember exactly which file or which symbol the SDK was reaching for at the time, and by now it has probably moved twice. Read this as the shape of the change, not the recipe. The real one in our repo is longer, uglier, and scarier.
+
+In practice the change looks like replacing something roughly equivalent to:
+
+```ts
+// before: picks up whatever globalThis.fetch happens to be
+const res = await fetch(url, init);
+```
+
+with:
+
+```ts
+// after: bypasses the global entirely
+import { fetch } from 'undici';
+
+const res = await fetch(url, init);
+```
+
+Commit the patch:
+
+```sh
+pnpm patch-commit <scratch-dir>
+```
+
+pnpm writes the diff into `patches/` and registers it in `package.json`:
+
+```jsonc
+{
+  "pnpm": {
+    "patchedDependencies": {
+      "@google/genai": "patches/@google__genai.patch"
+    }
+  }
+}
+```
+
+From that point on, every install reapplies the patch. The SDK calls Undici's `fetch` directly, the return value carries a real `ReadableStream`, `pipeThrough` exists, streaming works, and whatever was squatting on the global is shut out of the critical path.
+
+A patch on a vendored file is a bit of a smell, and I will not pretend otherwise. If you prefer a lighter touch, you can swap `globalThis.fetch` back to Undici's implementation at process boot:
+
+```ts
+import { fetch } from 'undici';
+globalThis.fetch = fetch;
+```
+
+That fixes the immediate symptom for everyone in the process, but it leaves a race with whichever dependency is doing the patching, and the winner depends on module load order. In our case the offender kept loading after our reassignment and winning, which is why we reached for `pnpm patch`. Your mileage will depend on where in the import graph the offender lives.
+
+## What I actually took away
+
+A few things have stuck with me since.
+
+Monkey-patching globals is a debt instrument. You borrow convenience now, and your successor pays interest in the form of confusing bugs that surface when a new library finally exercises the parts of the spec you quietly broke. The `pipeThrough` error was not a bug in the Google SDK. It was an old polyfill sitting in our dependency tree, waiting for the first caller that cared about the parts it got wrong.
+
+Explicit imports beat globals when you have the choice. When a library exposes `fetch` as both a named export and a global, use the named export. It costs you one line and buys you immunity against everything I just described.
+
+And when something "makes no sense," start by distrusting the environment instead of the library. A clean-repro check in a fresh project takes five minutes and has saved me days more than once. If your code breaks in context but works in isolation, the bug is almost never where you are looking.
