@@ -1,0 +1,32 @@
+---
+import Footer from '@/components/Footer.astro';
+import Header from '@/components/Header.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Page not found – Zubair Khalid"
+  description="The page you were looking for doesn't exist."
+>
+  <Header />
+  <main class="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 py-24 text-center sm:px-6 lg:px-8">
+    <p class="text-sm font-medium uppercase tracking-widest text-muted-foreground">404</p>
+    <h1 class="mt-4 text-4xl font-bold md:text-5xl">Page not found</h1>
+    <p class="mt-4 max-w-xl text-muted-foreground">
+      That URL doesn't lead anywhere on this site. It may have moved, or never existed.
+    </p>
+    <div class="mt-8 flex flex-wrap justify-center gap-4">
+      <a
+        href="/"
+        class="inline-flex items-center rounded-full border border-border px-5 py-2 text-sm font-medium hover:bg-muted"
+        >Home</a
+      >
+      <a
+        href="/blog"
+        class="inline-flex items-center rounded-full border border-border px-5 py-2 text-sm font-medium hover:bg-muted"
+        >Blog</a
+      >
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>

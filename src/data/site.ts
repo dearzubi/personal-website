@@ -1,4 +1,5 @@
 export const siteUrl = 'https://dearzubair.dev';
+export const siteName = 'Zubair Khalid';
 
 export const profile = {
   name: 'Zubair Khalid',

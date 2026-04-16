@@ -5,11 +5,37 @@ import Experience from '@/components/sections/Experience.astro';
 import Hero from '@/components/sections/Hero.astro';
 import Projects from '@/components/sections/Projects.astro';
 import Skills from '@/components/sections/Skills.astro';
-import { profile } from '@/data/site';
+import { profile, siteName, siteUrl } from '@/data/site';
 import PortfolioLayout from '@/layouts/PortfolioLayout.astro';
+
+const origin = Astro.site?.toString() ?? siteUrl;
+const sameAs = [profile.links.github, profile.links.linkedin];
+
+const personLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: profile.name,
+  jobTitle: profile.title,
+  url: origin,
+  email: `mailto:${profile.email}`,
+  description: profile.blurb,
+  sameAs,
+};
+
+const websiteLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: siteName,
+  url: origin,
+  inLanguage: 'en',
+  author: { '@type': 'Person', name: profile.name },
+};
+
+const jsonLd = JSON.stringify([personLd, websiteLd]).replace(/</g, '\\u003c');
 ---
 
 <PortfolioLayout title={`${profile.name} – ${profile.title}`} description={profile.blurb}>
+  <script is:inline type="application/ld+json" slot="head" set:html={jsonLd} />
   <Hero />
   <Skills />
   <Experience />
