@@ -32,7 +32,8 @@ const giscusRepo = /^[^/\s]+\/[^/\s]+$/.test(rawGiscusRepo)
 const giscusRepoId = import.meta.env.PUBLIC_GISCUS_REPO_ID;
 const giscusCategory = import.meta.env.PUBLIC_GISCUS_CATEGORY;
 const giscusCategoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID;
-const giscusReady = giscusRepo && giscusRepoId && giscusCategory && giscusCategoryId;
+const giscusReady =
+  import.meta.env.PROD && giscusRepo && giscusRepoId && giscusCategory && giscusCategoryId;
 ---
 
 <BaseLayout {...baseProps}>
