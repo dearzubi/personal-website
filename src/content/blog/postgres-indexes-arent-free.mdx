@@ -1,0 +1,177 @@
+---
+title: 'Your Postgres index is probably lying to you'
+description: 'Why adding an index can make a query slower, with a 10M row benchmark and the cost model behind the planner''s choice.'
+pubDate: 2026-04-16
+tags: ['postgresql', 'databases', 'performance', 'indexing']
+heroImage: '../../assets/blog/postgres-index-benchmark.png'
+---
+
+import { Image } from 'astro:assets';
+import benchmark from '@/assets/blog/postgres-index-benchmark.png';
+
+You add an index to a Postgres table. You run your `SELECT`. It's still slow. Sometimes, weirdly, it's slower than it was before the index existed.
+
+The folklore says indexes make things fast. They do, but only in a pretty narrow range of cases. Once your predicate matches a meaningful chunk of the table, an index can turn into a liability, and the planner knows this. That's why it will quietly ignore the index you just spent an hour building.
+
+I wanted to see the shape of that curve with real numbers, so I ran a small benchmark on a 10M row table. Below is the setup, the four queries I ran, and what the Postgres cost model is actually doing when it picks one plan over another.
+
+## The thing nobody tells you about B-tree lookups
+
+A B-tree index doesn't store your rows. It stores keys and pointers. Each pointer is a TID, which is a tuple identifier of the form `(block_number, offset)`. To actually return the row to you, Postgres has to go to the heap and read that block.
+
+If you're fetching one row by primary key, that's one index descent plus one heap read. Fine.
+
+If you're fetching a million rows through the index, you end up doing a million heap lookups. The index gives them to you in index order, not heap order, so those lookups are scattered across disk. Your OS page cache helps, but not as much as a sequential read from front to back. On a cold cache you're paying random I/O for every tuple.
+
+At some point the scattered-heap-lookup cost crosses over the cost of just reading the whole table top to bottom. The planner tries to figure out where that crossover is for your specific query, using statistics it has collected from `ANALYZE`. When it decides the sequential scan is cheaper, it skips the index. The benchmark below shows that behavior in action, and what happens when you strong-arm Postgres into using the index anyway.
+
+## The benchmark
+
+I ran this on a MacBook Pro M4 Pro with 24 GB RAM. The numbers below are meant to illustrate planner decisions at different selectivity levels, not to pin down absolute performance on any particular hardware.
+
+The table is deliberately boring:
+
+```sql
+CREATE TABLE orders (
+  id          BIGSERIAL PRIMARY KEY,
+  customer_id BIGINT NOT NULL,
+  amount      NUMERIC(10, 2) NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL,
+  status      TEXT NOT NULL
+);
+```
+
+10 million rows, with `status` skewed on purpose:
+
+- `completed`: ~68% of rows
+- `processing`: ~16%
+- `pending`: ~8%
+- `refunded`: ~1%
+
+(The remaining ~7% are a mix of other values I left in for noise.)
+
+That skew is the whole point. It lets me test the same B-tree index across very different selectivity levels on one column. Selectivity is the fraction of the table your predicate matches; low selectivity means few rows, high selectivity means many rows.
+
+I seeded the table, built the index, and ran `VACUUM ANALYZE` so the planner had fresh stats:
+
+```sql
+CREATE INDEX idx_orders_status ON orders (status);
+VACUUM ANALYZE orders;
+```
+
+Then I ran four queries through `EXPLAIN (ANALYZE, BUFFERS)`. The summary:
+
+<Image src={benchmark} alt="PostgreSQL index performance on a 10M row table: primary key lookup at 0.098ms, refunded filter (1% of table) at 406ms via bitmap heap scan, completed filter (68% of table) at 576ms via sequential scan, completed filter forced through the index at 776ms." />
+
+Let's walk through each row.
+
+### 1. `WHERE id = 42`, the happy case
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM orders WHERE id = 42;
+```
+
+Plan: `Index Scan using orders_pkey`. Time: `0.098 ms`.
+
+This is what people picture when they think "indexed query." One descent down the B-tree, one heap fetch, done. Selectivity here is 0.00001%. The index is doing exactly what it's good at.
+
+### 2. `WHERE status = 'refunded'`, still a win
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM orders WHERE status = 'refunded';
+```
+
+Plan: `Bitmap Heap Scan on orders` with a `Bitmap Index Scan on idx_orders_status` underneath. Time: `406 ms` for ~100k rows (roughly 1% of the table).
+
+The interesting part here is that Postgres didn't use a plain index scan. It built a bitmap. Bitmap scans are what Postgres reaches for when there are enough matching rows that random per-tuple heap fetches would hurt, but not so many that a seq scan wins. It reads the index, collects the TIDs into a bitmap of heap pages, then walks those pages in order. You get some locality back without scanning the whole heap.
+
+1% of 10M is still a lot of pages to touch. 406 ms sounds slow next to 0.098 ms, but compared to reading the whole table, it's a bargain.
+
+### 3. `WHERE status = 'completed'`, the planner opts out
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM orders WHERE status = 'completed';
+```
+
+Plan: `Seq Scan on orders`. No index in sight. Time: `576 ms` for ~6.76M rows (roughly 68% of the table).
+
+Postgres had the index available. It knew the predicate could be satisfied by that index. It still chose to ignore it. From the planner's point of view, fetching 6.76M TIDs from the index and then visiting the heap for each one would cost more than just sweeping the table sequentially, so it took the sweep.
+
+This is the decision that surprises people. "I added an index and my query is slow" almost always means "I added an index and the planner correctly refused to use it, and the underlying scan is just the cost of the data you asked for."
+
+### 4. `WHERE status = 'completed'` with the index forced, the punchline
+
+To see what the planner was saving us from, I disabled the alternatives and reran the same query:
+
+```sql
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM orders WHERE status = 'completed';
+```
+
+Plan: `Index Scan using idx_orders_status`. Time: `776 ms`. Same rows. Same data.
+
+That's 35% slower on identical output. The index, used for this query, is actively a tax. All of that extra time is the scattered heap fetches the bitmap scan had been smoothing out and the seq scan had been avoiding entirely.
+
+When someone on your team says "the planner is usually right, leave it alone," this is the kind of thing they've been burned by before.
+
+## How the planner actually decides
+
+The short version: for each candidate plan, Postgres estimates how many rows will flow through it and how many page reads that will cost, then picks the cheapest. Two settings control the cost of a page read:
+
+- `seq_page_cost`: cost of reading a page during a sequential scan. Default: `1.0`.
+- `random_page_cost`: cost of reading a page via a random access pattern (what an index scan does into the heap). Default: `4.0`.
+
+That 4x ratio is a knob, not a law. It was chosen to roughly reflect spinning disks. On an SSD, actual random reads are much closer to sequential, and a lot of production Postgres installations lower `random_page_cost` to `1.1` or `1.5`. If yours is still at the default and your storage is fast, the planner is overestimating the cost of index scans and may be skipping indexes that would actually win.
+
+The other critical input is statistics. `ANALYZE` samples the table and records things like the most common values, the histogram of values, and the correlation between the physical order of rows and the order of the indexed column. If your stats are stale, the row count estimate can be wildly off, and the whole cost comparison breaks.
+
+A quick way to check: look at your `EXPLAIN ANALYZE` output and compare the planner's estimate with the actual row count.
+
+```
+Seq Scan on orders  (cost=0.00..179024.12 rows=6750000 width=46)
+                    (actual time=0.012..432.117 rows=6757212 loops=1)
+```
+
+Those two numbers should be close. When they're off by an order of magnitude, that's a stats problem, not a plan problem.
+
+## Index-only scans and `INCLUDE`
+
+There's one more trick worth knowing, because it changes the selectivity calculus. If your query only needs columns that are in the index, Postgres can sometimes skip the heap entirely. That's an index-only scan, and it's often dramatically faster than either of the scans above.
+
+The catch has to do with how Postgres handles MVCC. Every row in the heap carries two hidden system columns, `xmin` and `xmax`, that record which transaction created the row version and which transaction (if any) deleted it. That's what Postgres consults to decide whether a given tuple is visible to your transaction. Indexes don't carry `xmin` or `xmax`. From an index entry on its own, Postgres has no way to tell whether the row it points to is actually visible to you right now.
+
+To avoid trudging to the heap every single time, Postgres maintains a small per-table structure called the visibility map. For each heap page, it tracks whether every tuple on that page is visible to every active transaction. When that "all-visible" flag is set for a page, an index-only scan can trust the index entry and skip the heap entirely. When it isn't set, the safe option is to go fetch the tuple and check visibility the long way.
+
+The all-visible flag gets turned on by `VACUUM` once a page has settled down. So on a recently vacuumed table, index-only scans behave the way the name suggests. On a table that just took a burst of `UPDATE`s or `DELETE`s and hasn't been vacuumed since, those pages lose their all-visible status and you're back to heap fetches. You can see this happening in `EXPLAIN ANALYZE` as a `Heap Fetches:` line under the `Index Only Scan` node. If that number is large, your "index-only scan" is really just a regular index scan wearing a better hat.
+
+You can build an index specifically for this pattern using `INCLUDE`:
+
+```sql
+CREATE INDEX idx_orders_customer_covering
+  ON orders (customer_id)
+  INCLUDE (amount, status);
+```
+
+Now a query like `SELECT customer_id, amount, status FROM orders WHERE customer_id = 42` can be served entirely from the index. No heap lookups. The columns in `INCLUDE` are stored only at the leaves, so they don't bloat the tree, and they aren't used for ordering or lookups.
+
+## Three things to check before adding another index
+
+Before you reach for `CREATE INDEX`, ask:
+
+1. **What fraction of the table does your predicate match?** Under ~5%, a B-tree index is usually the right tool. Between 5% and 30% it depends on row width and how well the column correlates with physical row order. Above that, you're usually better off with a sequential scan or a partial index that only covers the rows you actually care about.
+2. **Does your query need only a few columns?** If yes, a covering index with `INCLUDE` can skip the heap and change the math completely. In my experience, this is often a bigger win than adding another plain index.
+3. **Are your statistics fresh?** If you haven't run `ANALYZE` (or `VACUUM ANALYZE`) recently, the planner is guessing from outdated information. Bad stats produce bad plans, and no amount of indexing will fix that.
+
+## What to take away
+
+Indexes have a cost. They slow down writes, they take up disk, and each one is another plan the planner has to evaluate. They pay for themselves when your queries are selective enough that the alternative is worse, and they become dead weight when they aren't.
+
+When a query is slow, don't default to adding an index and seeing what happens. Run `EXPLAIN ANALYZE` first. Look at the plan. Compare the row estimate to the actual count. Ask whether the predicate is even selective enough for an index to help. Most of the time the answer is sitting right there in the output and you just need to read it.
+
+The planner is doing more work for you than most people realize. When it refuses to use an index you built, it's usually right, and it's worth spending ten minutes figuring out why before overriding it.
