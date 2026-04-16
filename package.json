@@ -34,6 +34,7 @@
     "astro": "^6.1.6",
     "astro-icon": "^1.1.5",
     "dayjs": "^1.11.20",
+    "medium-zoom": "^1.1.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2"
   },

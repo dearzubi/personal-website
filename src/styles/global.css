@@ -652,3 +652,14 @@
 [data-theme="dark"] .pagefind-ui__result-link:focus-visible {
   color: rgb(125 211 252);
 }
+
+/* ─────────────────────────────────────────────────────
+   Blog post image zoom (medium-zoom)
+───────────────────────────────────────────────────── */
+.prose img {
+  cursor: zoom-in;
+}
+
+.prose img.medium-zoom-image--opened {
+  cursor: zoom-out;
+}
