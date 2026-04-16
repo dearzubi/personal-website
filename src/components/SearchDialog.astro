@@ -147,7 +147,7 @@ import { Icon } from 'astro-icon/components';
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const links = Array.from(
       dialog.querySelectorAll<HTMLAnchorElement>('.pagefind-ui__result-link'),
-    );
+    ).filter((link) => !link.closest('.pagefind-ui__result-nested'));
     if (links.length === 0) return;
 
     const input = getSearchInput();
