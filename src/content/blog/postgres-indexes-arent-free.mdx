@@ -23,7 +23,7 @@ If you're fetching one row by primary key, that's one index descent plus one hea
 
 If you're fetching a million rows through the index, you end up doing a million heap lookups. The index gives them to you in index order, not heap order, so those lookups are scattered across disk. Your OS page cache helps, but not as much as a sequential read from front to back. On a cold cache you're paying random I/O for every tuple.
 
-At some point the scattered-heap-lookup cost crosses over the cost of just reading the whole table top to bottom. The planner tries to figure out where that crossover is for your specific query, using statistics it has collected from `ANALYZE`. When it decides the sequential scan is cheaper, it skips the index. The benchmark below shows that behavior in action, and what happens when you strong-arm Postgres into using the index anyway.
+At some point the scattered-heap-lookup cost crosses over the cost of just reading the whole table top to bottom. The planner tries to figure out where that crossover is for your specific query, using statistics it has collected from `ANALYZE`. When it decides the sequential scan is cheaper, it skips the index. The benchmark below shows that behaviour in action, and what happens when you strong-arm Postgres into using the index anyway.
 
 ## The benchmark
 
@@ -174,4 +174,4 @@ Indexes have a cost. They slow down writes, they take up disk, and each one is a
 
 When a query is slow, don't default to adding an index and seeing what happens. Run `EXPLAIN ANALYZE` first. Look at the plan. Compare the row estimate to the actual count. Ask whether the predicate is even selective enough for an index to help. Most of the time the answer is sitting right there in the output and you just need to read it.
 
-The planner is doing more work for you than most people realize. When it refuses to use an index you built, it's usually right, and it's worth spending ten minutes figuring out why before overriding it.
+The planner is doing more work for you than most people realise. When it refuses to use an index you built, it's usually right, and it's worth spending ten minutes figuring out why before overriding it.
