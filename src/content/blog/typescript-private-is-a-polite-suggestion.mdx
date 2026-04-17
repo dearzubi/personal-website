@@ -1,0 +1,205 @@
+---
+title: "What TypeScript's `private` actually protects you from (and what it doesn't)"
+description: "TypeScript's private, readonly, abstract, and friends vanish at compile time. Here's what survives to runtime, what doesn't, and which JavaScript features give you real guarantees."
+pubDate: 2026-04-17
+tags: ['typescript', 'javascript', 'oop', 'runtime', 'security']
+---
+
+TypeScript gives you a pile of class-related keywords that look borrowed from Java or C#: `public`, `private`, `protected`, `readonly`, `abstract`. They behave the way you would expect inside a TypeScript file. The compiler will stop you from touching a `private` field from outside the class, reassigning a `readonly` property, or instantiating an `abstract` class.
+
+The part worth being precise about is what happens after the compiler is done. Every one of those keywords is a TypeScript-only annotation. None of them exist at runtime. Once your code is JavaScript, all five keywords have been erased, and the object you hand off to the rest of the world has no memory of the rules you wrote down.
+
+This matters because "the rest of the world" includes a lot of code that happily walks through your object looking for properties: `JSON.stringify`, structured clone, loggers, analytics SDKs, ORMs, and any third-party library that accepts one of your objects and does something opinionated with it.
+
+## A small demonstration
+
+Consider a class that looks reasonable:
+
+```ts
+class User {
+  readonly id: string;
+  email: string;
+  private passwordHash: string;
+
+  constructor(id: string, email: string, passwordHash: string) {
+    this.id = id;
+    this.email = email;
+    this.passwordHash = passwordHash;
+  }
+}
+```
+
+The `private` in front of `passwordHash` reads like a guarantee. Nothing outside this class can see that field. The `readonly` on `id` reads the same way. Once the class is constructed, the id is fixed.
+
+Compile it with any reasonable target, and the output is close to this:
+
+```js
+class User {
+  id;
+  email;
+  passwordHash;
+  constructor(id, email, passwordHash) {
+    this.id = id;
+    this.email = email;
+    this.passwordHash = passwordHash;
+  }
+}
+```
+
+The keywords are gone. There is no hidden symbol, no non-enumerable flag, no frozen descriptor. `passwordHash` is a plain own enumerable property sitting right next to `email`. Every consumer of the object that walks its properties will walk right through it:
+
+```js
+const u = new User('u_123', 'a@b.com', 'hash_xyz_secret');
+
+JSON.stringify(u);
+// {"id":"u_123","email":"a@b.com","passwordHash":"hash_xyz_secret"}
+
+Object.keys(u);
+// ['id', 'email', 'passwordHash']
+
+for (const key in u) console.log(key);
+// id
+// email
+// passwordHash
+```
+
+And the `readonly` on `id` holds exactly as long as the access path goes through a typed reference. Anything that bypasses the type system succeeds:
+
+```js
+u.id = 'u_999';   // plain JavaScript: fine
+(u as any).id = 'u_999';   // TypeScript with an escape hatch: also fine
+```
+
+The only cost of defeating either guarantee is that you had to go around TypeScript to do it. Third-party libraries are, by definition, around TypeScript. They receive plain objects with plain properties.
+
+## The keywords, one by one
+
+It is worth stating each of these bluntly, because I keep meeting developers who believe one or more of them does something at runtime. I myself once believed the same.
+
+**`public`** is the default visibility modifier. It communicates intent to other TypeScript code and nothing else. At runtime the field is just a property.
+
+**`private`** tells the compiler to reject access from outside the class. That is the entire contract. The property is still enumerable, still writable, still visible to `JSON.stringify`, still serializable, still reflectable via `Object.keys` and `Object.getOwnPropertyNames`. A subclass or an external caller can poke at it through an `any` cast without complaint from the runtime.
+
+**`protected`** is `private` with one extra compile-time rule allowing subclass access. Same runtime story: the field is just a property.
+
+**`readonly`** blocks reassignment in TypeScript source. It produces no `Object.defineProperty` call, no frozen descriptor, no runtime protection at all. Any code that reaches the field without going through its TypeScript type, including anything your dependencies do, can reassign it.
+
+**`abstract`** prevents instantiation through a TypeScript-typed reference to the class. If the class leaks out through an untyped path such as reflection, a DI container, an `any` cast, or a dynamic `require`, `new` works fine and you get an instance of a class that was supposed to be uninstantiable.
+
+Each of these can be proven in about five lines. The compiler complains, you add `as any`, the runtime shrugs.
+
+```ts
+abstract class Shape { area(): number { return 0; } }
+const S: any = Shape;
+const s = new S();
+s.area(); // 0. "abstract" was a compile-time idea.
+```
+
+None of this is a bug. It is the documented behaviour. TypeScript is a layer of static analysis over JavaScript. The layer is thorough and genuinely useful, but it evaporates the moment the code runs.
+
+## The `readonly` trap is worth pausing on
+
+`readonly` feels like the strongest of the five because it reads the most declarative. It is also the one most likely to be quietly broken by code you do not control.
+
+```ts
+type Config = { readonly apiKey: string };
+
+function setup(cfg: Config) {
+  thirdPartyLib.init(cfg);
+  return cfg.apiKey;
+}
+```
+
+If `thirdPartyLib.init` happens to do `cfg.apiKey = rotateKey(cfg.apiKey)`, the reassignment succeeds. Your `readonly` annotation told the TypeScript compiler you intended the field to be immutable. It did not tell V8 anything at all. The library has no idea you had an opinion about this field, and even if it did, it has no language-level way to honour it.
+
+The same logic applies to `ReadonlyArray`, `Readonly<T>`, and every other type-level immutability primitive. They are assertions about what well-behaved TypeScript code should do. They are not barriers.
+
+## What actually holds at runtime
+
+There are three JavaScript mechanisms worth knowing, in roughly increasing strength.
+
+### Native private fields (`#name`)
+
+ES2022 added real private fields to JavaScript. Unlike TypeScript's `private`, these are enforced by the language. They are not enumerable, not accessible from outside the class, not visible to `JSON.stringify`, and not reachable through any bracket syntax or reflection API. The lexical access `this.#name` is the only way in.
+
+Rewriting the earlier `User`:
+
+```ts
+class User {
+  readonly id: string;
+  email: string;
+  #passwordHash: string;
+
+  constructor(id: string, email: string, passwordHash: string) {
+    this.id = id;
+    this.email = email;
+    this.#passwordHash = passwordHash;
+  }
+
+  verify(candidate: string): boolean {
+    return this.#passwordHash === candidate;
+  }
+}
+```
+
+And now the same enumeration paths:
+
+```js
+JSON.stringify(new User('u_123', 'a@b.com', 'hash_xyz_secret'));
+// {"id":"u_123","email":"a@b.com"}
+
+Object.keys(new User('u_123', 'a@b.com', 'hash_xyz_secret'));
+// ['id', 'email']
+```
+
+The hash is gone from every enumeration path. The class still works. The keyword changed from five letters to one symbol, and a whole category of accidental disclosure closed.
+
+### `Object.freeze`
+
+For actual immutability, freeze the object. `Object.freeze(cfg)` sets every own property to non-writable and non-configurable. Reassignment from a third-party library now fails silently in sloppy mode or throws in strict mode. Freezing is shallow, so nested objects need their own freeze for deep immutability.
+
+```js
+const cfg = Object.freeze({ apiKey: 'secret' });
+cfg.apiKey = 'other';
+// Throws in strict mode. Silently no-ops otherwise. Either way, apiKey is unchanged.
+```
+
+This is the only way to stop an uncooperative consumer from mutating your object.
+
+### Proxies
+
+Proxies let you intercept any operation on an object: property reads, writes, enumeration, deletion. Where `Object.freeze` permanently modifies the target, a Proxy wraps it behind a policy you define, which makes it the right tool for defending an object as it crosses a trust boundary into code you do not control.
+
+A minimal example that enforces a real runtime `readonly`:
+
+```ts
+function readonlyView<T extends object>(target: T): T {
+  return new Proxy(target, {
+    set(_t, key) {
+      throw new TypeError(`Cannot assign to '${String(key)}': read-only view`);
+    },
+    deleteProperty(_t, key) {
+      throw new TypeError(`Cannot delete '${String(key)}': read-only view`);
+    },
+  });
+}
+
+const cfg = readonlyView({ apiKey: 'secret', timeout: 3000 });
+
+cfg.apiKey;          // 'secret'
+cfg.apiKey = 'new';  // TypeError: Cannot assign to 'apiKey': read-only view
+```
+
+You can now hand `cfg` to the same uncooperative library from earlier and know, at the language level, that it cannot mutate your config. The same pattern extends to hiding fields entirely (return `undefined` from `get` for sensitive keys), logging every access, or enforcing arbitrary invariants on writes.
+
+Proxies are a bigger commitment than most codebases need. They add a layer of indirection, they can confuse debuggers, and they are easy to over-apply. Worth knowing about, probably not worth reaching for on a Tuesday. But when the threat model actually involves hostile code sharing your heap, this is the tool that was built for it.
+
+One heads-up before you leave: wrap a class that uses `#private` fields in a Proxy, and the two features collide in a way that is not obvious from either's documentation. If that combination is anywhere on your roadmap, I wrote [a short follow-up](/blog/your-proxy-has-an-impostor-problem) on exactly that interaction and what to do about it.
+
+## A useful mental model
+
+There are two different jobs going on, and they are easy to conflate because TypeScript's syntax copies the one that does less.
+
+The compile-time layer protects you from your own team's code, as long as that code is checked by `tsc`. `private`, `protected`, `readonly`, and `abstract` are excellent tools for that job. They catch real bugs during development at zero runtime cost. Use them freely.
+
+The runtime layer protects you from everything else: third-party libraries, serializers, loggers, data deserialized off the wire, any code path that did not pass through your types on the way in. For that job you need JavaScript-level mechanisms. For private data, use `#name`. For immutability, use `Object.freeze`. For hostile boundaries, use a `Proxy`.

@@ -7,6 +7,9 @@ import icon from 'astro-icon';
 import { siteUrl } from './src/data/site';
 import { remarkReadingTime } from './src/lib/remark-reading-time';
 
+// Skip the Cloudflare adapter in dev: its workerd module runner breaks `astro dev`.
+const isDev = process.env.NODE_ENV === 'development';
+
 export default defineConfig({
   site: siteUrl,
   integrations: [icon(), mdx(), sitemap()],
@@ -47,5 +50,5 @@ export default defineConfig({
     },
   ],
 
-  adapter: cloudflare({ imageService: 'compile' }),
+  ...(isDev ? {} : { adapter: cloudflare({ imageService: 'compile' }) }),
 });

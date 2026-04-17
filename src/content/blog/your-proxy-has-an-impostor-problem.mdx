@@ -1,0 +1,247 @@
+---
+title: 'Your Proxy has an impostor problem'
+description: "Native #private fields are brand-checked against the exact object they were installed on. Wrap that object in a Proxy and `this.#field` throws. A short follow-up on why, and what to do instead."
+pubDate: 2026-04-17
+tags: ['typescript', 'javascript', 'proxy', 'oop', 'security', 'runtime']
+---
+
+In [the previous post](/blog/typescript-private-is-a-polite-suggestion) I suggested `Proxy` as the tool to reach for when an object has to cross a trust boundary. That advice is still correct. It is also incomplete, and the missing piece will bite you the first time you wrap a class that uses `#private` fields.
+
+Here is the shape of the bite. A tiny class with one private field and one method that reads it:
+
+```ts
+class Box {
+  #secret: string;
+
+  constructor(secret: string) {
+    this.#secret = secret;
+  }
+
+  reveal(): string {
+    return this.#secret;
+  }
+}
+```
+
+Direct use works:
+
+```js
+const b = new Box('hidden');
+b.reveal();        // 'hidden'
+```
+
+Wrap the instance in a Proxy with an empty handler, which should be the identity transformation, and:
+
+```js
+const bView = new Proxy(b, {});
+bView.reveal();
+// TypeError: Cannot read private member #secret from an object
+//            whose class did not declare it
+```
+
+No trap, no policy, no interference, and the method still blows up. The Proxy is the full story.
+
+## Private fields are not properties
+
+This error makes more sense once you accept that `#secret` is not, in any useful sense, a property. The syntax is misleading. Native private fields are tracked by the JavaScript engine in a per-object internal list the spec calls `[[PrivateElements]]`. That list is populated exactly once, by the constructor, on exactly the object that came out of `new`. It has no property descriptor, it is not reflectable, and it cannot be added to any object that did not go through that constructor.
+
+Every access to `this.#secret` performs a brand check: does this specific object have a `#secret` entry in its private-elements list? If not, the engine throws immediately. That is what you saw.
+
+Private fields were designed this way on purpose. The whole point of adding real privacy to JavaScript was to have an access pattern that cannot be reached by anything except the lexical `this.#name` inside the declaring class. Reflection, `Object.keys`, `WeakRef` tricks, subclass hacks, and, yes, Proxy impersonation are all supposed to bounce off. The brand check is the enforcement.
+
+## Where `this` comes from
+
+The second ingredient is the way method calls resolve through a Proxy. When you write `bView.reveal()`, the engine does roughly:
+
+1. `[[Get]]` on `bView` for the key `"reveal"`. The default handler forwards to the target, so this returns the actual function.
+2. Call that function with `this` bound to the receiver of the `[[Get]]`, which is `bView`, the Proxy.
+3. Inside the function, `this.#secret` is `bView.#secret`. Brand check. Proxy is not in the private-elements list. Throw.
+
+The target has the private data. The method is the target's method. But `this` is the Proxy, because that is how the method was reached. Private fields care about `this`, not about where the function originally came from. So the check fails.
+
+This is not a bug. A Proxy is allowed to impersonate any property-level operation on the target, including method lookups. Private fields are the one kind of state the language explicitly decided Proxies cannot impersonate. Those two features are working exactly as designed. They just disagree, strenuously, about who `this` is.
+
+## The naive fix and the hole it leaves
+
+You can work around the brand check with a `get` trap that binds every function-typed property to the target:
+
+```js
+const bView = new Proxy(b, {
+  get(target, key, recv) {
+    const value = Reflect.get(target, key, recv);
+    return typeof value === 'function' ? value.bind(target) : value;
+  },
+});
+
+bView.reveal(); // 'hidden'
+```
+
+Methods now run with `this === target`, the brand check passes, and `#secret` is readable again. Problem solved, as long as reading is all you needed.
+
+It usually isn't. The reason you reached for a Proxy was probably to observe or gate writes. The naive fix quietly disables that:
+
+```js
+class Counter {
+  n = 0;
+  bump() { this.n++; }
+}
+
+const c = new Counter();
+let writes = 0;
+
+const cView = new Proxy(c, {
+  get(t, k, r) {
+    const v = Reflect.get(t, k, r);
+    return typeof v === 'function' ? v.bind(t) : v;
+  },
+  set(t, k, v) {
+    writes++;
+    return Reflect.set(t, k, v);
+  },
+});
+
+cView.bump();
+cView.bump();
+console.log(writes, c.n); // 0 2
+```
+
+The `set` trap never fires, because `bump` was bound to `c`, which means `this.n++` inside the method writes straight to the target. Two successful writes, your policy saw zero. The hole is exactly the size of the object's own methods, which for most classes is the surface area that actually matters.
+
+You can get fancier. You can return a wrapper function that re-enters the Proxy for property access, you can hand out separate "read" and "write" Proxies, you can build a membrane. All of that is real, all of it is writable in a weekend, none of it is in the standard library, and each piece adds a small debt that you will pay back, with interest, on a future Tuesday you cannot currently see.
+
+## The same shape, different built-ins
+
+This is not unique to `#fields`. It is a general pattern. Any JavaScript built-in that stores its state in an internal slot, and then brand-checks that slot inside its methods, breaks through a Proxy in the same way.
+
+```js
+const m = new Map([['a', 1]]);
+const p = new Proxy(m, {});
+p.get('a');
+// TypeError: Method Map.prototype.get called on incompatible receiver
+```
+
+`Date`, `Map`, `Set`, `WeakMap`, `Promise`, typed arrays, `ArrayBuffer`, they all behave this way. The shape of the error message changes, the shape of the problem does not. The method wants its `this` to be the exact kind of exotic object the engine constructed, and a Proxy is not, from the engine's point of view, that object.
+
+A useful mental rule: if the class you are wrapping keeps important state in something unreflectable, whether that is `[[PrivateElements]]` or `[[MapData]]` or `[[PromiseState]]`, a plain Proxy will not compose with it. Either do not wrap those objects directly, or accept that you will build a small adapter layer.
+
+## What to actually do
+
+Three patterns cover almost every case where you want both private state and Proxy-level policy. They are ordered roughly by how much structure you give up to get the composition back.
+
+### WeakMap-backed private state
+
+The trick is to stop using `#name` for the sensitive field and store it in a module-scoped `WeakMap` instead, keyed by the instance:
+
+```ts
+const privates = new WeakMap<object, { secret: string }>();
+
+class Box {
+  constructor(secret: string) {
+    privates.set(this, { secret });
+  }
+
+  reveal(): string {
+    return privates.get(this)!.secret;
+  }
+}
+```
+
+On its own this has exactly the same `this === proxy` problem as `#private`. The method still runs with `this === proxy`, the proxy is not in the WeakMap, `privates.get(proxy)` returns `undefined`, and the `!` assertion trips. Swapping `#` for a `WeakMap` does not, by itself, fix anything.
+
+The reason this pattern works, with one extra step, is that **you own the keys of the map**. That is the "identity" the earlier section referred to. `#private` brand-checks `[[PrivateElements]]` against the exact object the constructor ran on, and no code outside the engine can change that mapping. `WeakMap` just asks "have I seen this object before?" and returns whatever value you associated with it. Both the target and the proxy are objects. Both can be keys. So at the point where you create the proxy, you also register the proxy as a valid key for the same entry:
+
+```ts
+function makeReadOnlyView<T extends object>(target: T): T {
+  const proxy = new Proxy(target, {
+    set() { throw new TypeError('read-only'); },
+  });
+
+  // Register the proxy as a second key pointing at the same private data.
+  const entry = privates.get(target);
+  if (entry) privates.set(proxy, entry);
+
+  return proxy;
+}
+
+const b = new Box('hidden');
+const view = makeReadOnlyView(b);
+
+view.reveal();              // 'hidden'
+(view as any).newProp = 1;  // TypeError: read-only
+```
+
+Now `privates.get(this)` succeeds whether `this` is the target or the proxy, because both point at the same `{ secret }` object. And because we did not rebind methods to the target, method calls on the proxy still run with `this === proxy`, which means `set` traps fire for method-internal assignments. You get real write gating and private-ish state, at the cost of a few lines of registration code.
+
+`WeakMap` is slightly slower than `#name` and slightly more verbose. In exchange you get a privacy primitive that you control, which is the whole point.
+
+### Closure-wrapped plain object
+
+If the Proxy is the public API and the class is only an implementation detail, you can skip the brand-check dance by not exposing a class at all. Keep the state in a closure, expose a plain object whose methods you control, and let the Proxy wrap the plain object:
+
+```ts
+type BoxView = {
+  reveal(): string;
+  rename(next: string): void;
+};
+
+function createBox(secret: string): BoxView {
+  let current = secret;
+
+  return {
+    reveal() { return current; },
+    rename(next: string) { current = next; },
+  };
+}
+
+const box = createBox('hidden');
+
+const readOnly = new Proxy(box, {
+  set() { throw new TypeError('read-only'); },
+});
+
+readOnly.reveal();            // 'hidden'
+readOnly.rename('rotated');   // allowed: plain method call, no assignment
+readOnly.reveal();            // 'rotated'
+(readOnly as any).foo = 'x';  // TypeError: read-only
+```
+
+The returned object has no private fields and no internal slots. The `current` variable is inaccessible to anything outside the closure because JavaScript closures have no reflection API. Every Proxy trap behaves the way the spec says it should, because there is nothing brand-checked for the Proxy to get wrong.
+
+The cost is that you lose class-based inheritance, the `instanceof` operator, and the general class-shaped ergonomics (static members, protected methods, and so on). For "policy at the boundary" use cases that is usually a fair trade, and occasionally an outright improvement, because closures do not accidentally expose anything the way class fields sometimes do.
+
+### Membranes
+
+For the rare case where you genuinely need full isolation between two realms sharing a heap, the serious answer is a membrane: a wrapping layer that intercepts every object crossing the boundary, wraps outgoing references, unwraps incoming ones, and never lets the inner target escape. A sketch of the shape:
+
+```ts
+// Pseudocode, not a recipe.
+function makeMembrane<T extends object>(inner: T): T {
+  const wrapped = new WeakMap<object, object>();
+
+  function wrap<U>(value: U): U {
+    if (value === null || typeof value !== 'object') return value;
+    const cached = wrapped.get(value as object);
+    if (cached) return cached as U;
+
+    const proxy = new Proxy(value as object, {
+      get(target, key) { return wrap(Reflect.get(target, key)); },
+      set()            { throw new TypeError('boundary is read-only'); },
+      // ... and a trap for every other operation, each one also
+      // wrapping its arguments and return values in both directions.
+    });
+
+    wrapped.set(value as object, proxy);
+    return proxy as U;
+  }
+
+  return wrap(inner);
+}
+```
+
+The sketch is deliberately incomplete. A production membrane has to handle functions, `apply` and `construct` traps, prototype chains, symbol keys, frozen targets, revocation, and the identity-preservation invariants that let `a === b` still mean something across the boundary. That is real, documented, and well outside the scope of a blog post. If you think you need one, you probably need to read a few papers first, then write a lot of tests, then the membrane, roughly in that order.
+
+## The takeaway
+
+Native `#private` fields and `Proxy` are two of the strongest runtime guarantees JavaScript offers. `#` gives you state that nothing outside the class can reach. `Proxy` gives you intercept-everything wrapping around an object. Both are real runtime mechanisms, unlike the TypeScript keywords from the previous post. They are also, by design, incompatible: if `Proxy` could impersonate private-field access, private fields would not be private.
+
+When you combine the two patterns, pick which guarantee matters more for the object in question, and build the other one using a mechanism that can compose. `#` when the object will never be proxied. `WeakMap` plus careful identity management when it will. And if either decision starts to feel unclear, that is usually the class asking, politely, to be made smaller.
