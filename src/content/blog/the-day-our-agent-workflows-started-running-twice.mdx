@@ -1,0 +1,206 @@
+---
+title: 'The day our agent workflows started running twice'
+description: "An early MVP of our no-code AI agent platform ran each user workflow as a single BullMQ job. Every so often, that job would run twice, side effects and all. The cause was not what any of us looked for first: it was an in-memory cache, a perfectly ordinary preamble, and a microtask chain that quietly held the Node event loop hostage long enough for BullMQ to give up on the worker."
+pubDate: 2026-04-18T23:00:00Z
+tags: ['node.js', 'javascript', 'event-loop', 'bullmq', 'ai-agents', 'performance', 'async', 'promises']
+---
+
+A startup I joined a while back was building the early MVP of a no-code AI agent platform. An n8n-style drag-and-drop workflow builder with LLM calls, tool invocations, webhooks, triggers, and I/O ports as first-class citizens, on a React Flow canvas that users could build against. The idea was that a non-engineer could wire up blockchain trading and analytics workflows, data-processing pipelines, Telegram-driven notification agents, and so on, without writing code.
+
+The early production MVP had a quiet, infrequent bug that we could not pin down for days. Every so often, a user's workflow would run twice. Tokens billed twice by whichever LLM provider the user had wired up. Telegram webhooks invoking with the same message twice. Trades placed twice. Support tickets were polite and specific, and by the time we tried to reproduce a given report, the run was long gone, and the logs were mostly unhelpful.
+
+It was the kind of bug that does not show up in your test suite or in your own dogfooding, because it only happens at scale. Our tests ran tiny synthetic workflows. Our dogfooding ran ten-node agents. The reports were coming from users with three-hundred-row CSVs and fifteen-step agents, and they were right.
+
+## Looking in the wrong places first
+
+Before I get to the cause, here is the sequence of wrong theories it took me to rule out, in roughly the order I held them.
+
+**Theory one: double enqueue.** The API that triggered a run did a best-effort dedupe on the trigger ID. Maybe it was broken. It was not. Enqueue logs showed exactly one job per trigger.
+
+**Theory two: two workers claiming the same job at once.** We ran three BullMQ worker replicas against the same queue. BullMQ uses a Redis-level lock to make this impossible, and I read that code path carefully enough that I mostly believed it. "Mostly" did not hold up against the evidence; two workers were definitely running the same job. What I had not yet asked was *why* the lock was allowing it to happen.
+
+**Theory three: a tool throwing and falling into retry.** We had automatic retries on transient failures. A silent exception could have bounced the job back into the queue. But the retry path looked distinct in the logs, and none of the affected runs went through it. The second run looked, to every log we had, like a fresh pickup by a different worker of a job that had not failed, and that kept nagging me.
+
+## What BullMQ's docs had been telling me the whole time
+
+When I eventually went and re-read [BullMQ's page on stalled jobs](https://docs.bullmq.io/guide/workers/stalled-jobs), the answer was sitting in one paragraph:
+
+> Due to the nature of NodeJS, which is (in general) single threaded and consists of an event loop to handle the asynchronous operations, the process function needs to be written carefully so that the CPU is not occupied for a long time. [...] if the CPU is very busy [...], the worker may not have time to renew the lock and tell the queue that it is still working on the job, which is likely to result in the job being marked as stalled. A stalled job is moved back to the waiting status and will be processed again by another worker.
+
+BullMQ protects in-flight jobs with a Redis lock. Each worker runs a timer that renews that lock every fifteen seconds or so by default. If the timer misses its slot for long enough, the lock expires, the queue decides the worker has died, and another worker picks up the job. Both workers then happily run it end to end, both announce success, and the side effects happen twice.
+
+The assumption that breaks here is that a timer scheduled on the Node event loop actually fires on time. That assumption is not free.
+
+## What our MVP executor was actually doing
+
+The MVP workflow engine ran an entire user workflow inside a single BullMQ job. When a job started, the executor walked the workflow's DAG in topological order, ran the nodes one at a time, and pushed an SSE status update to the user's browser after each node finished.
+
+Execution was sequential on purpose. Downstream nodes fed on upstream outputs, so parallelising them was not an option for most workflows. The SSE feed had to arrive in order for the UI to make sense. And we wanted each node to be independently idempotent, so that a future version of the engine could resume a crashed run from the last successful node.
+
+Before a node's tool or LLM actually fired, the executor ran two small preamble (or setup) steps. The snippets below are not the code we actually shipped, but the shape is right, which is what matters for this story.
+
+The first was input resolution. Every node declared which upstream ports fed its inputs, and the executor looked those up in an in-memory cache of completed node outputs:
+
+```ts
+type InputBinding = { sourceNodeId: string; sourcePort: string };
+
+async function resolveInputs(
+  node: WorkflowNode,
+  ctx: ExecutionContext,
+): Promise<Record<string, unknown>> {
+  const resolved: Record<string, unknown> = {};
+  for (const [portName, binding] of Object.entries(node.inputs)) {
+    const key = `${binding.sourceNodeId}.${binding.sourcePort}`;
+    resolved[portName] = await ctx.outputs.get(key);
+  }
+  return resolved;
+}
+```
+
+The second was template interpolation. Nodes had user-authored config strings with `{{variable}}` tokens, and the executor resolved each token against an in-memory cache:
+
+```ts
+async function interpolate(
+  template: string,
+  ctx: ExecutionContext,
+): Promise<string> {
+  let out = '';
+  let cursor = 0;
+  for (const match of template.matchAll(/\{\{([\w.]+)\}\}/g)) {
+    out += template.slice(cursor, match.index);
+    out += String(await ctx.vars.get(match[1]));
+    cursor = (match.index ?? 0) + match[0].length;
+  }
+  return out + template.slice(cursor);
+}
+```
+
+Both caches presented an async API. We kept them async for future-proofing, so that if we ever replaced the backing store with something external and genuinely asynchronous, callers would not need to change. In the MVP, the backing store was just a `Map`, so every call returned its value synchronously and then wrapped it in a resolved Promise to honour the signature.
+
+And then there was the for-each node. A fan-out that took a list as input and ran a sub-workflow per item. Users loved it. You could drop a 500-row CSV on one side, and a trio of tool calls on the other, and the platform would walk every row through every tool.
+
+The fan-out ran one item at a time. Most tool-side effects were order-sensitive, so a parallel version would have introduced races that the average user would not know to consider. The SSE stream was per-item, so parallel execution would arrive out of order. For the kind of workflows our users built, sequential execution made more sense overall, not least because it kept rate-limit errors from third-party services under control.
+
+For one iteration of the for-each, the executor walked the whole sub-workflow, and every node went through input resolution and template interpolation before its tool fired. Multiply that out for a 500-row CSV running a six-node sub-workflow with four input ports and eight template tokens per node. The executor was performing around thirty-six thousand cache-backed `await`s per run before any tool saw a single real input.
+
+## Why the preamble stalled the loop
+
+The part that took me an embarrassingly long time to accept was that the runs were not stalling on the tools. They were stalling on the preamble, before any tool fired at all.
+
+Both caches were backed by in-memory `Map`s. Every `ctx.outputs.get(key)` and every `ctx.vars.get(path)` read its value synchronously and then wrapped it in a resolved Promise to honour the async signature. So every `await` inside `resolveInputs` and `interpolate` was an `await` on a Promise that had already resolved before the engine saw it.
+
+That distinction is the whole bug. `await` on a resolved Promise does not fall through. It suspends the calling function and queues the resumption as a microtask to run when the call stack is empty. The stack emptied immediately because nothing else was on it. The resumption ran, called the next cache lookup, received another already-resolved Promise, and queued another resumption. One microtask per `await`, per input port and template token, per node, per iteration of the for-each.
+
+Node has a rule that it does not break. When the call stack is empty, it fully drains its two microtask queues, Promise and `process.nextTick` callbacks, before it allows the event loop to advance a phase or run any other macrotasks. A loop of `await`s on resolved Promises is a microtask queue that refills itself on every pass. While the queue is non-empty, every macrotask in the process must wait for its turn, including BullMQ's lock-renewal timer, which is a `setInterval` living in the timers phase.
+
+I pulled the shape out of the executor and into a standalone script to make sure I was reading it right. 2,000 items, a six-node sub-workflow, four input ports, and eight template tokens per node, all caches warm, with a `setTimeout(fn, 15)` scheduled before the for-each as a tripwire for the lock-renewal timer.
+
+The script below was a minimal reproduction, not the executor itself. The arithmetic in the cache keys (`% 2000`, `nodeIdx * 37 + i`, `% 10000`) is only there to rotate through a pre-populated set of cache entries so every lookup is a hit. It is not anything the real engine would ever do.
+
+```js
+const CSV_ROWS = 2_000;
+const NODES_PER_SUBWORKFLOW = 6;
+const INPUTS_PER_NODE = 4;
+const TEMPLATE_TOKENS_PER_NODE = 8;
+
+// The two caches are pre-populated with 2,000 node ids × 10 ports of outputs
+// and 10,000 variable values. Every getFromOutputs/getFromVars call below
+// hits one of those entries.
+
+async function resolveInputs(nodeIdx) {
+  const inputs = {};
+  for (let i = 0; i < INPUTS_PER_NODE; i++) {
+    // % 2000 cycles through the pre-populated node ids so every lookup hits.
+    inputs[`in${i}`] = await getFromOutputs(`node-${nodeIdx % 2000}.port-${i}`);
+  }
+  return inputs;
+}
+
+async function interpolateConfig(nodeIdx) {
+  const parts = [];
+  for (let i = 0; i < TEMPLATE_TOKENS_PER_NODE; i++) {
+    // Spread the lookups across the 10,000 pre-populated variable keys so
+    // we are not just reading the same one every time.
+    parts.push(await getFromVars(`var.${(nodeIdx * 37 + i) % 10000}`));
+  }
+  return parts.join(' | ');
+}
+
+async function executeNode(nodeIdx) {
+  await resolveInputs(nodeIdx);
+  await interpolateConfig(nodeIdx);
+}
+
+async function runForEach() {
+  for (let i = 0; i < CSV_ROWS; i++) {
+    for (let n = 0; n < NODES_PER_SUBWORKFLOW; n++) {
+      await executeNode(i * NODES_PER_SUBWORKFLOW + n);
+    }
+  }
+}
+
+const scheduledAt = process.hrtime.bigint();
+setTimeout(() => {
+  const elapsed = Number(process.hrtime.bigint() - scheduledAt) / 1e6;
+  console.log(`lock renewal fired ${(elapsed - 15).toFixed(2)} ms late`);
+}, 15);
+
+const start = process.hrtime.bigint();
+await runForEach();
+console.log(`for-each ran in ${(Number(process.hrtime.bigint() - start) / 1e6).toFixed(2)} ms`);
+```
+
+Output on a laptop:
+
+```
+for-each ran in 21.86 ms
+lock renewal fired 8.80 ms late
+```
+
+A timer that wanted to fire fifteen milliseconds after it was scheduled instead fired after twenty-four milliseconds. Nine milliseconds of lateness is not, in itself, catastrophic. The reproduction was deliberately minimal: it modelled only the preamble, not the actual tool calls, not the Zod validation, not the credential lookups, not the LLM calls. Production runs had all of those costs stacked on top, and on large-fan-out workflows, a single run could stall the loop for thirty seconds or more. Thirty seconds is the number that matters because it is BullMQ's default lock lifetime; cross it, and the queue delegates the task to a different worker.
+
+## The fix that saved us
+
+The fix had to do one thing: stop treating a whole workflow run as a single indivisible blob of work and allow the event loop to run through its phases. I used `setImmediate` wrapped in a Promise so it can be `await`ed. Awaiting a Promise that resolves during the check phase (where `setImmediate` runs) forces the current microtask queue to drain, allows Node to advance through the loop phases, and gives timers and I/O callbacks, including BullMQ's lock-renewal timer, a chance to run.
+In the executor, the change was applied to the for-each loop. Again, not the exact code we shipped, but the shape was similar:
+
+```ts
+function yieldToEventLoop() {
+  return new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+async function runForEach(items: unknown[], subWorkflow: Workflow, ctx: ExecutionContext) {
+  const CHUNK = 100;
+  for (let i = 0; i < items.length; i += CHUNK) {
+    for (let j = i; j < Math.min(i + CHUNK, items.length); j++) {
+      await runSubWorkflow(subWorkflow, withItem(ctx, items[j]));
+    }
+    await yieldToEventLoop();
+  }
+}
+```
+
+Now, every hundred items, the loop stopped long enough for Node to tick the event loop. Same reproduction, with the batched version:
+
+```
+lock renewal fired 0.14 ms late
+for-each ran in 25.42 ms
+```
+
+The timer fired almost on time. The for-each was a little slower overall because yielding has a cost, and we are doing it twenty times per run. BullMQ's lock survived. Jobs stopped being re-queued. The duplicate-run reports stopped arriving.
+
+The microtask chain inside a single chunk is still there. One hundred items walking a sub-workflow, multiple nodes, and a dozen `await`s per node is still potentially thousands of microtasks back to back, with no phase advance between them. What the chunk boundary buys is an upper bound on how long that chain can grow before the loop gets a turn, and that bound is well within the limits that BullMQ's lock-renewal timer can tolerate without complaint. The fix is a bound on starvation, not its elimination.
+
+A few months later, the platform was revised to change from having "one BullMQ job per workflow" to "one BullMQ job per node," with the engine connecting the results through a mix of Postgres and Redis. That made each job small. We also made some optimisations to make jobs run faster and put safeguards in place to avoid starving the event loop.
+
+## A small note on `process.nextTick`
+
+One quick footnote, because it would have bitten us in the same place if we had reached for it.
+
+`process.nextTick` looks like a cousin of `setImmediate` and is sometimes recommended as a way to "defer" work. They are not the same tool. `nextTick` callbacks go into the microtask queue, not into a phase queue, and they drain *ahead of* Promise resolutions. A recursive `process.nextTick` is a more effective way to starve the event loop than a recursive Promise chain, because `nextTick` runs first every time the queue is drained. If someone on a PR reaches for `process.nextTick` to yield to the event loop, they have it backwards.
+
+## Async is not the same as yielding
+
+The lesson from the whole affair, and the one I wish I had internalised years earlier, is that `async` and `await` give you one guarantee and one guarantee only: the call stack is not blocked while you are waiting. That is not the same as giving the event loop a turn. If the Promise you are awaiting has no asynchronous work to do, you have not yielded. You have just scheduled your next line of code onto the microtask queue, which is exactly the queue the event loop must finish draining before it is allowed to do anything else and progress through loop phases.
+
+Most of the time, this is fine, because most of the time the Promises you await actually touch something slow. The shape that slipped through our review was the one where they did not. A warm cache in a hot loop is an entirely asynchronous program that, in effect, is entirely synchronous. The event loop waits, politely, behind a queue that refuses to end, and the processes that depend on the event loop being alive quietly give up.
