@@ -5,6 +5,14 @@ import { getSkillIcon } from '@/lib/getSkillIcon';
 
 const categories = Object.keys(skills) as Array<keyof typeof skills>;
 const firstCategory = categories[0];
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 ---
 
 <section id="skills" class="py-24">
@@ -25,26 +33,27 @@ const firstCategory = categories[0];
       {
         categories.map((category) => {
           const isActive = category === firstCategory;
+          const slug = slugify(category);
           return (
             <button
               role="tab"
-              id={`tab-${category}`}
+              id={`tab-${slug}`}
               aria-selected={isActive ? 'true' : 'false'}
-              aria-controls={`panel-${category}`}
+              aria-controls={`panel-${slug}`}
               data-category={category}
               class:list={[
                 'chip-tab cursor-pointer rounded-full px-6 py-3 text-sm font-medium transition-all duration-300',
                 isActive
-                  ? 'bg-sky-500 text-white shadow-lg dark:bg-sky-600'
+                  ? 'bg-sky-700 text-white shadow-lg dark:bg-sky-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700',
               ]}
             >
               {category}
               <span
                 class:list={[
-                  'ml-2 rounded-full px-2 py-0.5 text-xs',
+                  'ml-2 rounded-full px-2 py-0.5 text-xs font-semibold',
                   isActive
-                    ? 'bg-white/20 text-white'
+                    ? 'bg-white text-sky-700'
                     : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
                 ]}
               >
@@ -59,11 +68,12 @@ const firstCategory = categories[0];
     {
       categories.map((category) => {
         const isActive = category === firstCategory;
+        const slug = slugify(category);
         return (
           <div
-            id={`panel-${category}`}
+            id={`panel-${slug}`}
             role="tabpanel"
-            aria-labelledby={`tab-${category}`}
+            aria-labelledby={`tab-${slug}`}
             data-category={category}
             class:list={['skills-panel', isActive ? '' : 'hidden']}
           >
@@ -107,7 +117,7 @@ const firstCategory = categories[0];
           t.setAttribute('aria-selected', isSelected ? 'true' : 'false');
 
           if (isSelected) {
-            t.classList.add('bg-sky-500', 'text-white', 'shadow-lg', 'dark:bg-sky-600');
+            t.classList.add('bg-sky-700', 'text-white', 'shadow-lg', 'dark:bg-sky-700');
             t.classList.remove(
               'bg-gray-100',
               'text-gray-700',
@@ -119,7 +129,7 @@ const firstCategory = categories[0];
 
             const badge = t.querySelector('span');
             if (badge) {
-              badge.classList.add('bg-white/20', 'text-white');
+              badge.classList.add('bg-white', 'text-sky-700');
               badge.classList.remove(
                 'bg-gray-200',
                 'text-gray-600',
@@ -128,7 +138,7 @@ const firstCategory = categories[0];
               );
             }
           } else {
-            t.classList.remove('bg-sky-500', 'text-white', 'shadow-lg', 'dark:bg-sky-600');
+            t.classList.remove('bg-sky-700', 'text-white', 'shadow-lg', 'dark:bg-sky-700');
             t.classList.add(
               'bg-gray-100',
               'text-gray-700',
@@ -139,7 +149,7 @@ const firstCategory = categories[0];
             );
             const badge = t.querySelector('span');
             if (badge) {
-              badge.classList.remove('bg-white/20', 'text-white');
+              badge.classList.remove('bg-white', 'text-sky-700');
               badge.classList.add(
                 'bg-gray-200',
                 'text-gray-600',

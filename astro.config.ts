@@ -14,6 +14,10 @@ export default defineConfig({
   site: siteUrl,
   integrations: [icon(), mdx(), sitemap()],
 
+  build: {
+    inlineStylesheets: 'always',
+  },
+
   markdown: {
     remarkPlugins: [remarkReadingTime],
     shikiConfig: {
