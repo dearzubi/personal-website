@@ -42,9 +42,9 @@ const sectionNav = [
               <span class="relative z-10 flex items-center gap-2">
                 <Icon
                   name={item.icon}
-                  class="section-icon size-4 text-gray-600 transition-colors group-hover:text-sky-600 dark:text-gray-300 dark:group-hover:text-sky-400"
+                  class="section-icon size-4 text-gray-600 transition-colors group-hover:text-sky-700 dark:text-gray-300 dark:group-hover:text-sky-400"
                 />
-                <span class="section-label text-gray-600 transition-colors group-hover:text-sky-600 dark:text-gray-300 dark:group-hover:text-sky-400">
+                <span class="section-label text-gray-600 transition-colors group-hover:text-sky-700 dark:text-gray-300 dark:group-hover:text-sky-400">
                   {item.label}
                 </span>
               </span>
@@ -60,9 +60,9 @@ const sectionNav = [
           <span class="relative z-10 flex items-center gap-2">
             <Icon
               name="lucide:book-open"
-              class="blog-icon size-4 text-gray-600 transition-colors group-hover:text-sky-600 dark:text-gray-300 dark:group-hover:text-sky-400"
+              class="blog-icon size-4 text-gray-600 transition-colors group-hover:text-sky-700 dark:text-gray-300 dark:group-hover:text-sky-400"
             />
-            <span class="blog-label text-gray-600 transition-colors group-hover:text-sky-600 dark:text-gray-300 dark:group-hover:text-sky-400">
+            <span class="blog-label text-gray-600 transition-colors group-hover:text-sky-700 dark:text-gray-300 dark:group-hover:text-sky-400">
               Blog
             </span>
           </span>
@@ -124,7 +124,7 @@ const sectionNav = [
               <a
                 href={item.href}
                 data-mobile-link
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-sky-50 hover:text-sky-600 dark:text-gray-200 dark:hover:bg-sky-900/40 dark:hover:text-sky-400"
+                class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-sky-50 hover:text-sky-700 dark:text-gray-200 dark:hover:bg-sky-900/40 dark:hover:text-sky-400"
               >
                 <Icon name={item.icon} class="size-4" />
                 {item.label}
@@ -136,7 +136,7 @@ const sectionNav = [
           <a
             href="/blog"
             data-mobile-link
-            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-sky-50 hover:text-sky-600 dark:text-gray-200 dark:hover:bg-sky-900/40 dark:hover:text-sky-400"
+            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-sky-50 hover:text-sky-700 dark:text-gray-200 dark:hover:bg-sky-900/40 dark:hover:text-sky-400"
           >
             <Icon name="lucide:book-open" class="size-4" />
             Blog
@@ -153,7 +153,7 @@ const sectionNav = [
   const activeClasses = {
     pill: 'opacity-100',
     inactivePill: 'opacity-0',
-    text: ['text-sky-600', 'dark:text-sky-400'],
+    text: ['text-sky-700', 'dark:text-sky-400'],
     inactiveText: ['text-gray-600', 'dark:text-gray-300'],
   };
 
