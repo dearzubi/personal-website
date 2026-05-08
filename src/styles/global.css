@@ -732,6 +732,33 @@
   color: rgb(125 211 252);
 }
 
+/* Anchor offset so TOC jumps don't sit flush to the viewport top. */
+.prose :is(h2, h3, h4, h5, h6) {
+  scroll-margin-top: 5rem;
+}
+
+/* Heading autolinks: keep heading typography, reveal a # marker on hover. */
+.prose :is(h2, h3, h4, h5, h6) > a.heading-anchor {
+  color: inherit;
+  text-decoration: none;
+  font-weight: inherit;
+  position: relative;
+}
+
+.prose :is(h2, h3, h4, h5, h6) > a.heading-anchor::before {
+  content: "#";
+  position: absolute;
+  left: -1.25rem;
+  color: var(--color-muted-foreground);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.prose :is(h2, h3, h4, h5, h6):hover > a.heading-anchor::before,
+.prose :is(h2, h3, h4, h5, h6) > a.heading-anchor:focus-visible::before {
+  opacity: 1;
+}
+
 /* ─────────────────────────────────────────────────────
    Blog post image zoom (medium-zoom)
 ───────────────────────────────────────────────────── */

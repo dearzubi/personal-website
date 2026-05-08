@@ -1,0 +1,525 @@
+---
+title: "Let's design a debouncer in JavaScript"
+description: "Designing a debouncer sounds simple, but in practice it is a surprisingly tricky little thing. We start with the naive setTimeout and keep poking it until it can forward arguments, behave around `this`, cancel and flush on demand, respect a maxWait, and stop handing out a fresh copy every time the consumer asks politely for the same one."
+pubDate: 2026-05-09T00:00:00Z
+tags: ['node.js', 'javascript']
+---
+
+## Prerequisite
+A basic understanding of factory functions, closures, and `this` is required.
+
+---
+
+Let's assume you have a table showing an organisation's users. You are now tasked with implementing a search input that filters users by name, with the constraint that there should be no search button to click.
+The problem is how to perform filtration (assuming an API call) without clicking a button. Intuition suggests that the filtration should happen automatically as the user types.
+In an ideal world, where everything is superfast and super-efficient, this should feel very smooth, with the table updating in real-time as soon as the user starts typing, but sadly, the world is never ideal.
+But let's check the solution anyway to see what's wrong with it.
+
+## The "ideal-world" solution
+
+```js
+const searchInput = document.getElementById('search');
+searchInput.addEventListener('input', (e) => {
+  fetch(`/api/users/search?q=${e.target.value}`)
+      .then(r => r.json())
+      .then(filterUsers);
+});
+```
+
+There is nothing fancy here. We just attached an input handler to the search input that performs an API call to get filtered users. The issue is screaming at us: every keystroke triggers an API call. Imagine a user typing 4-5 characters per second, that's 4-5 API calls per second, and most of them are resource wastage. For example, if we need to search for Tim Cook, that's 8 characters (including the space). With the current solution, that's 8 back-to-back API calls. For each API call the server allocated resources, performed some middleware logic (some auth validation and logging at the least), fetched filtered data from the database (assuming database is able to filter results; almost all modern databases can do), serialised the results, and finally returned the response all that for us to never care for those 7 API results and only settle for the final 8th one; resulting in huge resource wastage. It might not be a big concern on your dev machine or for a total of 100 users in production (though that's still impressive; kudos to you). But it's definitely a bad solution, no matter the scale. Let's move on to a bit better solution.
+
+## A better but still far from good solution
+
+How about we delay the API call instead of firing it on each keystroke? Sounds good? Let's see what that will look like.
+
+```js
+const searchInput = document.getElementById('search');
+searchInput.addEventListener('input', (e) => {
+  setTimeout(() => {
+      fetch(`/api/users/search?q=${e.target.value}`)
+      .then(r => r.json())
+      .then(filterUsers);
+  }, 1000)
+});
+```
+Any problems here? Well, yes, it's the same thing as before. We only delayed the API calls; it never reduced the number of API calls. Each keystroke now initiates a new timer that settles roughly a second later and calls the API. Still the same resource wastage. What if we could remove/cancel the previous timer before initiating a new one? Interesting point. Let's check that out.
+
+```js
+let timer
+const searchInput = document.getElementById('search');
+searchInput.addEventListener('input', (e) => {
+    if (timer) {
+        clearTimeout(timer)
+    }
+    timer = setTimeout(() => {
+        fetch(`/api/users/search?q=${e.target.value}`)
+        .then(r => r.json())
+        .then(filterUsers);
+    }, 1000)
+});
+```
+
+Now, on each keystroke, we first clear the previous timer and then initiate a new one. Clearing a timer means the corresponding API call will never occur if the timer was still pending. That right there is the core idea of a debouncer. **Debounce essentially means taking a burst of events and reacting only to the latest one after some time has passed.** In this case, we take a burst of typing inputs and react only to the last keystroke after a set time (1000 ms = 1 sec in our example) when the user stops typing. All intermediate keystroke events are basically cancelled. This works, but it's not good enough:
+
+- Not reusable. What if we need to debounce something else?
+- What if we want to cancel the last timer (or API call)?
+- What if this is used in a React component, and the following happens:
+  - API call is still in-flight.
+  - Component rerenders, setting `timer` to undefined.
+  - User starts typing again; code sees timer is not defined and initiates a new one.
+  - A race starts where the API call that happens last overrides the results of the previous.
+
+Given these, one should use a production-ready solution. My recommendation is not to hand-roll a solution; instead, use an already battle-tested one like [Lodash Debouncer](https://lodash.com/docs/4.18.1#debounce). However, I understand sometimes that's not feasible. Maybe you can't or don't want to introduce a third-party dependency. Or, perhaps, you are preparing for an interview and want to learn how to write a good enough debouncer.
+
+## Designing a reusable debouncer
+
+***Note: This is not the only way to write a debouncer. There are many implementations, but the core idea stays the same. I usually like factory functions to introduce code reusability.***
+
+Let's start with a factory function that outputs a pre-configured, reusable debouncer.
+
+```js
+function createDebouncer(opts) {
+    // validation and configuration
+    return function debouncer(fn) {
+        // core implementation
+    }
+}
+```
+`createDebouncer` takes an `opts` object, creates a closure for the inner `debouncer` function and finally returns it. `debouncer` takes a function `fn` as an argument and performs some logic, which we will write soon. `fn` is our function/logic that we want to debounce. The `opts` object holds configuration properties:
+
+- `timeout`: The time to wait before invoking `fn`.
+- `maxWait`: Max time we are willing to wait, after which `fn` must be invoked. Handy in cases where `fn` invocation must not be delayed indefinitely.
+
+### Validating `opts`
+
+Now, let's first validate `opts`.
+
+```js
+function createDebouncer(opts) {
+    function isFinitePositive(v) {
+        return (typeof v === 'number' && !Number.isNaN(v) && Number.isFinite(v) && v > 0)
+    }
+
+    const timeout = opts?.timeout
+    const maxWait = opts?.maxWait
+
+    if (!isFinitePositive(timeout)) {
+        throw new Error("timeout must be a positive number in milliseconds")
+    }
+    if (maxWait !== undefined && !isFinitePositive(maxWait)) {
+        throw new Error("maxWait must be a positive number in milliseconds")
+    }
+
+    return function debouncer(fn) {
+        // core implementation
+    }
+}
+```
+
+We ensured that `timeout` must be present, and `maxWait` can optionally be present. Both should be finite and positive numbers in milliseconds. We are throwing errors if validation fails. One can argue to use defaults, but I am not in favour of that. Defaults here can swallow an actual bug in the code, and can make debugging a nightmare. Additionally, we could set `maxWait` to a default value, ensuring that a debounced function invocation is never delayed indefinitely, but we will let the consumer decide what's best for their use case.
+
+### Setting up `debouncedFn`
+
+We will now focus on the `debouncer` function, and I will strip out the outer factory function for now. First question: What should this `debouncer` function return? If we take a close look at the argument of this function, we can see it takes another function `fn`. You might have guessed it already. If `debouncer` is taking a function that needs to be debounced, then it must return a new variation of that input function that should be debounceable (not sure if this is the right term, well, it is now). Essentially, `fn` -> `debouncer` -> `debouncedFn` like the following:
+
+```js
+    return function debouncer(fn) {
+        return function debouncedFn() {
+            // something to do with `fn` here.
+        }
+    }
+```
+
+Now, what do we do with `fn` inside `debouncedFn`? Do we call it and return the result? No, that's meaningless. We actually need to delay the invocation of `fn` somehow. One of the most common ways to delay the execution of a function in JavaScript is to use `setTimeout`, which we already saw in the opening of this blog post. Therefore, we can do this:
+
+
+```js
+    return function debouncer(fn) {
+        let timer
+        return function debouncedFn() {
+            if (timer) {
+                clearTimeout(timer)
+            }
+            timer = setTimeout(() => fn(), timeout)
+        }
+    }
+```
+
+You can see this looks very similar to what we did at the very beginning when we attached an `input` event handler to the search input. However, the code is reusable here. You can pass any function to make it debounced. `debouncer` creates a closure for `debouncedFn`, and `timer` lives in that closure. Each call to `debouncedFn` clears any existing `timer` and initiates a new one. Is that it? Did we finally design a good enough debouncer? Well, not actually. There is a lot more to come, but trust me, it's necessary. For starters, what if `fn` takes arguments? Where do they come from? We have to pass them through `debouncedFn` as follows:
+
+```js
+    return function debouncer(fn) {
+        let timer
+        return function debouncedFn(...args) {
+            if (timer) {
+                clearTimeout(timer)
+            }
+            timer = setTimeout(() => fn(...args), timeout)
+        }
+    }
+```
+### Forwarding `this` and supporting cancel
+
+This code, however, has a few issues. What if `fn` is not a function at all? What if `fn` uses `this` during invocation; what will `this` refer to? How to cancel the timer without invoking `fn`?
+Well, if `fn` is not a function, then it can't be invoked, and JavaScript will throw a `TypeError: fn is not a function` at runtime, and because `setTimeout` is asynchronous, the error will skip any synchronous error handler, which will probably crash the application. Then there is an issue with `this`. During `fn` invocation, if `fn` is a traditional function defined using `function` keyword, then `this` might be `undefined` or the global object, depending on whether your code is running in strict mode or not. `this` could also refer to something entirely different if `fn` is bound to an object with `bind`. If `fn` is an arrow function, then `this` will refer to the lexical scope where the arrow function was defined. You see, there is a lot of uncertainty. Finally, there is no possible way to cancel the timer if we decide not to invoke the delayed `fn`. Let's fix these issues:
+
+
+```js
+    return function debouncer(fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        let timer
+
+        function clearTimer() {
+            if (!timer) {
+                return
+            }
+            clearTimeout(timer)
+            timer = null
+        }
+
+        const debouncedFn = function(...args) {
+            clearTimer()
+            timer = setTimeout(() => fn.apply(this, args), timeout)
+        }
+
+        debouncedFn.cancel = function () {
+            clearTimer()
+        }
+
+        return debouncedFn
+    }
+```
+
+`fn` is guaranteed to be a function when invoked. `this` is much more predictable here. It can be `undefined` in strict mode, the window/global object in non-strict mode, or another object to which `debouncedFn` is bound through `bind`. `apply` then forwards the same `this` to `fn` only if `fn` is a traditional function defined using the `function` keyword. However, if `fn` is an arrow function, then inside it `this` comes from the lexical scope where `fn` was originally defined; the first argument to `apply` will be ignored and `this` will not be forwarded from `debouncedFn` to `fn`. For example, if you do the following:
+
+```js
+    btn.addEventListener('click', function () {
+        // some logic before
+        const fn = () => {
+            // some more logic
+            // `this` used here
+        }
+        const debouncedFn = debouncer(fn)
+        const someObject = {}
+        debouncedFn.bind(someObject)()
+        // some more logic here
+    })
+```
+
+In this case, `this` inside `fn` refers to the button element on which the click event handler is added, even though we bound `debouncedFn` to `someObject`. However, if we modify this example a tiny bit:
+
+```js
+    btn.addEventListener('click', () => {
+        // some logic before
+        const fn = () => {
+            // some more logic
+            // `this` used here
+        }
+        const debouncedFn = debouncer(fn)
+        const someObject = {}
+        debouncedFn.bind(someObject)()
+        // some more logic here
+    })
+```
+
+Here, we replaced the event handler from a traditional function to an arrow function, and the rest is kept the same as before. Now, `this` inside `fn` refers to the window/global object in non-strict mode or `undefined` in strict mode, assuming the event handler is being attached in the global scope. Still, in this case, `this` is not forwarded from `debouncedFn` to `fn`, which is bound to `someObject`. The point of explaining all this is that even though we are forwarding `this` from `debouncedFn` to `fn`, it's not guaranteed to be forwarded, given how and where `fn` is defined. As the designer of our debouncer, we assume the consumer will pass in a traditional function, but there is no guarantee. It's the consumer's job to decide what's best for them.
+
+Going back to our debouncer, you must have noticed that we extracted the timer-clear logic into a separate, reusable function and added a `cancel` method to our `debouncedFn` object that calls `clearTimer`. Clearing the timer essentially cancels a debounced `fn` call.
+
+### Adding `maxWait`
+
+Our debouncer is already looking pretty good now, but what about `maxWait`? Remember, this is a safeguard against an indefinitely delayed function invocation. For example, imagine a fast stream of events. We use a debounced function to batch events and send them to an API, but if events keep coming in, and we keep cancelling the latest debounce timer, we might delay the invocation indefinitely. If something crashes the app, we might lose all the events received so far. There is, however, a better solution for this using a throttler, but for the sake of this blog post, assume we want to achieve it with a debouncer. That's where `maxWait` comes in handy. It caps how long the current burst of calls can keep pushing the invocation back. If the burst has been going on for at least `maxWait` ms when a new call comes in, we invoke `fn` immediately instead of resetting the timer yet again. The effect is that `fn` fires at most once every `maxWait` ms, no matter how relentless the burst is. Let's handle this:
+
+```js
+    return function debouncer(fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        let timer
+        let burstStart
+
+        function clearTimer() {
+            if (!timer) {
+                return
+            }
+            clearTimeout(timer)
+            timer = null
+        }
+
+        const debouncedFn = function(...args) {
+            clearTimer()
+            const now = Date.now()
+            if (burstStart === undefined) {
+                burstStart = now
+            }
+            if (maxWait && (now - burstStart) >= maxWait) {
+                burstStart = undefined
+                fn.apply(this, args)
+                return
+            }
+            timer = setTimeout(() => {burstStart = undefined; fn.apply(this, args)}, timeout)
+        }
+
+        debouncedFn.cancel = function () {
+            clearTimer()
+        }
+
+        return debouncedFn
+    }
+```
+
+Pretty straightforward logic. We have another closure-scoped variable `burstStart` that records the time of the first call in the current burst. Each subsequent call checks whether the burst has now run longer than `maxWait`. If it has, we fire `fn` immediately and reset `burstStart` so the next call kicks off a fresh burst. We also reset `burstStart` inside the `setTimeout` callback once the natural debounce settles, since that also closes out the current burst. Did you notice that we have a bit of duplicate logic around the `fn` call and the reset of `burstStart`? Perhaps it's a good idea to extract that into a reusable function.
+
+### Extracting `run`
+
+```js
+    return function debouncer(fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        let ctx
+        let args
+        let timer
+        let burstStart
+
+        function clearTimer() {
+            if (!timer) {
+                return
+            }
+            clearTimeout(timer)
+            timer = null
+        }
+
+        function run() {
+            fn.apply(ctx, args)
+            args = null
+            ctx = null
+            timer = null
+            burstStart = undefined
+        }
+
+        const debouncedFn = function(..._args) {
+            ctx = this
+            args = _args
+            clearTimer()
+            const now = Date.now()
+            if (burstStart === undefined) {
+                burstStart = now
+            }
+            if (maxWait && (now - burstStart) >= maxWait) {
+                run()
+                return
+            }
+            timer = setTimeout(() => run(), timeout)
+        }
+
+        debouncedFn.cancel = function () {
+            clearTimer()
+        }
+
+        return debouncedFn
+    }
+```
+
+We have added two new variables, `ctx` and `args`, and a new function `run`. Every call to `debouncedFn` updates the value of `ctx` and `args` with the latest values, so it does not matter when `run` is invoked; it will act on the most recent values. Our debouncer is already shaping very nicely.
+
+### Adding `flush`
+
+Another thing we need to take care of is flushing. Flushing basically means clear any pending call to `fn` (clear timer) and immediately invoke `fn` now. Basically, `cancel` and `run` combined into one. Let's now implement the flush method.
+
+```js
+    return function debouncer(fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        let ctx
+        let args
+        let timer
+        let burstStart
+
+        function clearTimer() {
+            if (!timer) {
+                return false
+            }
+            clearTimeout(timer)
+            timer = null
+            return  true
+        }
+
+        function run() {
+            fn.apply(ctx, args)
+            args = null
+            ctx = null
+            timer = null
+            burstStart = undefined
+        }
+
+        const debouncedFn = function(..._args) {
+            ctx = this
+            args = _args
+            clearTimer()
+            const now = Date.now()
+            if (burstStart === undefined) {
+                burstStart = now
+            }
+            if (maxWait && (now - burstStart) >= maxWait) {
+                run()
+                return
+            }
+            timer = setTimeout(() => run(), timeout)
+        }
+
+        debouncedFn.cancel = function () {
+            clearTimer()
+        }
+
+        debouncedFn.flush = () => {
+           if (clearTimer()) {
+               run()
+           }
+        }
+
+        return debouncedFn
+    }
+```
+
+Just like `cancel`, `flush` is a method on `debouncedFn` object. I've made another small tweak. We only call `run` inside `flush` if there was a pending `timer` that we first cleared. If there were no pending `timer`, calling `run` would not make sense, as it does not adhere to the idea of flushing. Our debouncer is pretty much ready. Let's see how a consumer can utilise it.
+
+```js
+    const debouncer = createDebouncer({
+        timeout: 500,
+        maxWait: 5000
+    })
+    function fn(data) {
+        // important logic
+    }
+    const debouncedFn = debouncer(fn)
+
+    someEvent((d) => debouncedFn(d))
+```
+
+Neat, innit.
+
+### Caching with `WeakMap`
+
+However, there is one tiny (or big, depending on how you treat it) issue with it. What if the consumer calls `debouncer` twice, passing the same `fn`, perhaps by mistake? Imagine some code such as:
+
+```js
+    for (let batch of dataBatches) {
+        debouncedFn = debouncer(fn)
+        debouncedFn(batch)
+    }
+```
+
+This is a big uh-oh moment. Even though the same `fn` is passed in every loop iteration to `debouncer`, each call to `debouncer` sets up a new closure environment, resetting local variables. You will now have competing calls to `fn` coming from many different `debouncedFn`. Another example is using this debouncer in a React component. If the component rerenders, you will end up with a new `debouncedFn`. If something else depends on the reference to `debouncedFn`, such as a dependency array in a `useEffect` hook, that will cause it to rerender again, causing unnecessary rerenders. So, how do we solve this? Good thing you are curious. Let's tackle this.
+
+```js
+function createDebouncer(opts) {
+    function isFinitePositive(v) {
+        return (typeof v === 'number' && !Number.isNaN(v) && Number.isFinite(v) && v > 0)
+    }
+
+    const timeout = opts?.timeout
+    const maxWait = opts?.maxWait
+
+    if (!isFinitePositive(timeout)) {
+        throw new Error("timeout must be a positive number in milliseconds")
+    }
+    if (maxWait !== undefined && !isFinitePositive(maxWait)) {
+        throw new Error("maxWait must be a positive number in milliseconds")
+    }
+
+    let cache = new WeakMap()
+
+    const debouncer = function (fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        const cachedFn = cache.get(fn)
+        if (cachedFn) {
+            return cachedFn
+        }
+
+        let ctx
+        let args
+        let timer
+        let burstStart
+
+        function clearTimer() {
+            if (!timer) {
+                return false
+            }
+            clearTimeout(timer)
+            timer = null
+            return  true
+        }
+
+        function run() {
+            fn.apply(ctx, args)
+            args = null
+            ctx = null
+            timer = null
+            burstStart = undefined
+        }
+
+        const debouncedFn = function(..._args) {
+            ctx = this
+            args = _args
+            clearTimer()
+            const now = Date.now()
+            if (burstStart === undefined) {
+                burstStart = now
+            }
+            if (maxWait && (now - burstStart) >= maxWait) {
+                run()
+                return
+            }
+            timer = setTimeout(() => run(), timeout)
+        }
+
+        debouncedFn.cancel = function () {
+            clearTimer()
+        }
+
+        debouncedFn.flush = () => {
+           if (clearTimer()) {
+               run()
+           }
+        }
+
+        cache.set(fn, debouncedFn)
+
+        return debouncedFn
+    }
+
+    debouncer.clearCache = function () {
+        cache = new WeakMap()
+    }
+
+    return debouncer
+}
+```
+
+We have introduced a cache using `WeakMap`. As you know, functions in JavaScript are objects, and objects have references. `WeakMap` allows you to set object references as keys. We deliberately reach for `WeakMap` rather than `Map` here: a `Map` would hold its keys strongly, so any `fn` we cached would be kept alive by the cache for as long as the `debouncer` instance lived, and the `debouncedFn` closure attached to it would tag along. `WeakMap` holds its keys weakly, so once the consumer drops their reference to `fn`, both the entry and the `debouncedFn` are eligible for garbage collection. Therefore, on the first call to `debouncer` to create the first instance of `debouncedFn`, we cache it before returning, and on subsequent calls, we check the cache and return from it. We are also attaching a `clearCache` function to the `debouncer` function object if the consumer wants to reset the cache for any reason. One thing to note, `cache` lives in the first closure established by `createDebouncer` factory function, which ensures a cache is created per `debouncer` instance and shared across all `debouncedFn` instances created from that `debouncer`.
+
+This now solves our earlier loop bug because no matter how many times you call `debouncer(fn)`, as long as `fn` reference remains stable, you will get the same `debouncedFn` back. The "stable reference" caveat matters in React: the cache only helps if `fn` itself is stable across renders (e.g. wrapped in `useCallback` or hoisted out of the component); otherwise every render hands `debouncer` a new `fn` and you get a fresh `debouncedFn` each time.
+
+While we are at it, there is another tiny gotcha you need to be aware of. Calling `bind` on a function creates a new function reference. Therefore, the following will return a different `debouncedFn` on each call.
+
+```js
+    const debouncedFn1 = debouncer(fn.bind(obj))
+    const debouncedFn2 = debouncer(fn.bind(obj))
+
+    // debouncedFn1 !== debouncedFn2 because fn.bind(obj) !== fn.bind(obj)
+```
+
+Even though `fn` is the same and is bound to the same object. The reference is different in both cases, and the cache won't help you there.
+
+Finally, there you have it. Your very own debouncer. Again, this is a good-enough debouncer, which is okay for most cases, but I recommend using a battle-tested solution like one from Lodash. For example, there are a few more specialised cases that we did not handle, including the leading/trailing mode switch.

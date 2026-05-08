@@ -1,9 +1,11 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import type { MarkdownHeading } from 'astro';
 import Footer from '@/components/Footer.astro';
 import Giscus from '@/components/Giscus.astro';
 import Header from '@/components/Header.astro';
 import SearchDialog from '@/components/SearchDialog.astro';
+import TableOfContents from '@/components/TableOfContents.astro';
 import { profile, siteUrl } from '@/data/site';
 import { dayjs } from '@/lib/dayjs';
 import BaseLayout from './BaseLayout.astro';
@@ -11,8 +13,10 @@ import BaseLayout from './BaseLayout.astro';
 type Props = {
   post: CollectionEntry<'blog'>;
   readingTime: string;
+  headings: MarkdownHeading[];
 };
-const { post, readingTime } = Astro.props;
+const { post, readingTime, headings } = Astro.props;
+const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 const { title, description, pubDate, updatedDate, tags, heroImage } = post.data;
 
 const origin = Astro.site?.toString() ?? siteUrl;
@@ -66,7 +70,11 @@ const giscusReady =
   )}
   <Header />
   <main>
-    <article class="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+    <div class:list={[
+      'mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8',
+      tocHeadings.length > 0 && 'xl:grid xl:grid-cols-[minmax(0,1fr)_14rem] xl:gap-12',
+    ]}>
+    <article class="mx-auto w-full max-w-4xl">
     <header class="mb-8">
       <h1 class="text-4xl font-bold md:text-5xl">{title}</h1>
       <p class="mt-3 text-sm text-muted-foreground">
@@ -102,6 +110,14 @@ const giscusReady =
       />
     )}
     </article>
+    {tocHeadings.length > 0 && (
+      <aside class="hidden xl:block" aria-label="Article navigation">
+        <div class="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-8">
+          <TableOfContents headings={tocHeadings} />
+        </div>
+      </aside>
+    )}
+    </div>
   </main>
   <Footer />
   <SearchDialog />
