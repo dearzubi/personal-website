@@ -1,0 +1,106 @@
+---
+import type { MarkdownHeading } from 'astro';
+
+type Props = {
+  headings: MarkdownHeading[];
+};
+
+const { headings } = Astro.props;
+const items = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
+---
+
+{items.length > 0 && (
+  <nav aria-label="Table of contents" class="toc text-sm">
+    <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      On this page
+    </p>
+    <ul class="border-l border-border">
+      {items.map((h) => (
+        <li>
+          <a
+            href={`#${h.slug}`}
+            data-toc-link={h.slug}
+            class:list={[
+              'toc-link block border-l-2 border-transparent py-1 leading-snug text-muted-foreground transition-colors hover:text-foreground',
+              h.depth === 2 ? 'pl-3' : 'pl-6',
+            ]}
+            style="margin-left: -1px;"
+          >
+            {h.text}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+)}
+
+<style>
+  .toc :global(.toc-link[data-active='true']) {
+    color: var(--color-foreground);
+    border-color: var(--color-primary);
+    font-weight: 500;
+  }
+</style>
+
+<script>
+  function initToc() {
+    const links = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]'),
+    );
+    if (links.length === 0) return;
+
+    const linkBySlug = new Map<string, HTMLAnchorElement>();
+    for (const link of links) {
+      const slug = link.dataset.tocLink;
+      if (slug) linkBySlug.set(slug, link);
+    }
+
+    const headings = Array.from(linkBySlug.keys())
+      .map((slug) => document.getElementById(slug))
+      .filter((el): el is HTMLElement => el !== null);
+    if (headings.length === 0) return;
+
+    let activeSlug: string | null = null;
+    function setActive(slug: string | null) {
+      if (slug === activeSlug) return;
+      if (activeSlug) {
+        linkBySlug.get(activeSlug)?.removeAttribute('data-active');
+      }
+      activeSlug = slug;
+      if (slug) {
+        linkBySlug.get(slug)?.setAttribute('data-active', 'true');
+      }
+    }
+
+    const offset = 100;
+    function update() {
+      let current: HTMLElement | null = null;
+      for (const h of headings) {
+        if (h.getBoundingClientRect().top - offset <= 0) {
+          current = h;
+        } else {
+          break;
+        }
+      }
+      const fallback = headings[0];
+      const target = current ?? fallback;
+      setActive(target ? target.id : null);
+    }
+
+    let ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        update();
+        ticking = false;
+      });
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    update();
+  }
+
+  initToc();
+</script>

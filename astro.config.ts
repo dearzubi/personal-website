@@ -4,6 +4,8 @@ import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, fontProviders } from 'astro/config';
 import icon from 'astro-icon';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeSlug from 'rehype-slug';
 import { siteUrl } from './src/data/site';
 import { remarkReadingTime } from './src/lib/remark-reading-time';
 
@@ -12,7 +14,22 @@ const isDev = process.env.NODE_ENV === 'development';
 
 export default defineConfig({
   site: siteUrl,
-  integrations: [icon(), mdx(), sitemap()],
+  integrations: [
+    icon(),
+    mdx({
+      rehypePlugins: [
+        rehypeSlug,
+        [
+          rehypeAutolinkHeadings,
+          {
+            behavior: 'wrap',
+            properties: { className: ['heading-anchor'], 'aria-label': 'Link to this section' },
+          },
+        ],
+      ],
+    }),
+    sitemap(),
+  ],
 
   build: {
     inlineStylesheets: 'always',
@@ -20,6 +37,15 @@ export default defineConfig({
 
   markdown: {
     remarkPlugins: [remarkReadingTime],
+    rehypePlugins: [
+      [
+        rehypeAutolinkHeadings,
+        {
+          behavior: 'wrap',
+          properties: { className: ['heading-anchor'], 'aria-label': 'Link to this section' },
+        },
+      ],
+    ],
     shikiConfig: {
       themes: { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' },
       defaultColor: false,
