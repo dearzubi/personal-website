@@ -1,0 +1,383 @@
+---
+title: "Throttling, properly, in JavaScript"
+description: "A throttler looks like a debouncer's calmer sibling until you actually try to write one. We start from a scroll handler that runs a few dozen times a second, work our way through a leading-edge `lastRun` timestamp, then add a trailing call, cancel, flush, and a WeakMap so the same `fn` does not quietly become two throttlers."
+pubDate: 2026-05-09T13:00:00Z
+tags: ['node.js', 'javascript']
+---
+
+## Prerequisite
+A basic understanding of factory functions, closures, and `this` is required. If you have read the [debouncer post](/blog/lets-design-a-debouncer-in-javascript), the shape of the code here will feel familiar; the behaviour, however, is meaningfully different.
+
+---
+
+Picture a long article page with one of those thin progress bars across the top that slides from 0% to 100% as you scroll. The product requirement is unsurprising: as the user scrolls, the bar should reflect their position. Easy. You attach a `scroll` handler, read `window.scrollY`, do a tiny calculation, and update the bar.
+The catch is that browsers fire `scroll` very enthusiastically, often dozens of times per second on a trackpad and substantially more on a high-refresh-rate display. The handler itself is cheap, but the work it triggers (a layout read, a width update, perhaps a React state change) is not, and we are doing it far more often than any human eye can perceive. Let's start with the obvious version anyway and see how badly it behaves.
+
+## The "ideal-world" solution
+
+```js
+const bar = document.getElementById('progress-bar');
+window.addEventListener('scroll', () => {
+  const scrolled = window.scrollY;
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  bar.style.width = `${(scrolled / max) * 100}%`;
+});
+```
+
+Nothing exciting here. We compute a percentage and shove it into a width. The trouble is that on a fast scroll the handler can run sixty, ninety, a hundred and twenty times a second, and most of those updates are invisible: the user cannot tell the difference between a bar at 41.2% and a bar at 41.4%. Each call still pays the full cost: a forced layout read, a style mutation, possibly a re-render of a React tree that owns the bar. None of this matters on a static dev page with three paragraphs of lorem ipsum, but on a real article on a mid-range phone, the page starts feeling sticky during scroll, and that is the cheapest kind of jank to ship and the most annoying to debug. We need to do less work, not faster work.
+
+## A better but still far from good solution
+
+The instinct that worked for the debouncer (delay everything by a bit, cancel earlier delays) is the wrong instinct here. We do not want to wait until the user stops scrolling to update the bar; that would leave the bar frozen during the entire scroll and only catch up at the end, which is the opposite of useful. What we actually want is to update the bar regularly during the scroll, just not on every single event. So instead of a timer, let's reach for a timestamp.
+
+```js
+let lastRun = 0;
+const interval = 100;
+
+const bar = document.getElementById('progress-bar');
+window.addEventListener('scroll', () => {
+  const now = Date.now();
+  if (now - lastRun < interval) {
+    return;
+  }
+  lastRun = now;
+
+  const scrolled = window.scrollY;
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  bar.style.width = `${(scrolled / max) * 100}%`;
+});
+```
+
+We record the time of the last update and ignore any event that arrives less than 100 ms after it. The bar now updates at most ten times a second, which is plenty for a human eye, and the rest of the scroll events are dropped on the floor without ceremony. This is the core idea of throttling. **Throttle essentially means letting an event fire at most once per interval, no matter how fast the events are coming in.** Where a debouncer collapses a burst into one delayed call at the end, a throttler lets the burst through at a steady, capped rate.
+
+It works. It is also not good enough:
+
+- Not reusable. The next time we need to throttle something (a `mousemove`, a websocket message, an autosave), we copy-paste this and pray we remember to rename `lastRun`.
+- The very last event in a burst is silently dropped. If the user scrolls quickly to the bottom of the page and stops, the final position might land inside that 100 ms window after the previous update, and the bar will sit a few pixels short of 100% until the user nudges it again. Subtle, but the kind of thing a designer will notice within a day of shipping.
+- No way to cancel the throttled call, no way to force it to fire on demand, and the same `fn` passed in twice quietly becomes two throttlers, each with their own `lastRun`.
+
+You could fix all of this in place, and people often do. But once you find yourself adding a third feature flag to a function defined inside an event handler, it is time to do the polite thing and refactor. As before, my honest recommendation is to use a battle-tested implementation like [Lodash throttle](https://lodash.com/docs/4.17.15#throttle) and move on with your life. But if you cannot pull in a dependency, or you have an interview next Tuesday, let's build one.
+
+## Designing a reusable throttler
+
+***Note: There are several reasonable ways to write a throttler, and they disagree, politely, about edge cases. The version below leans on a factory function for reusability and supports both the leading and trailing edge of a burst, which is what most consumers actually want.***
+
+Same opening shape as the debouncer:
+
+```js
+function createThrottler(opts) {
+    // validation and configuration
+    return function throttler(fn) {
+        // core implementation
+    }
+}
+```
+
+`createThrottler` takes an `opts` object, sets up a closure for the inner `throttler` function, and returns it. `throttler` takes the function `fn` we want to throttle and returns a throttled variation of it. For the throttler, `opts` only really needs one property:
+
+- `interval`: The minimum time between two invocations of `fn`.
+
+You will notice there is no `maxWait` analogue here. A throttler does not have the "indefinitely deferred" failure mode that a debouncer has, because the interval itself is the cap; the longest you can ever wait between invocations is one `interval`.
+
+### Validating `opts`
+
+```js
+function createThrottler(opts) {
+    function isFinitePositive(v) {
+        return (typeof v === 'number' && !Number.isNaN(v) && Number.isFinite(v) && v > 0)
+    }
+
+    const interval = opts?.interval
+
+    if (!isFinitePositive(interval)) {
+        throw new Error("interval must be a positive number in milliseconds")
+    }
+
+    return function throttler(fn) {
+        // core implementation
+    }
+}
+```
+
+`interval` must be a finite, positive number in milliseconds. We throw if it is not. Defaults are tempting here (60 fps? 100 ms? something that "feels right"?), but a default would happily accept a typo like `intervalMs: 100` and silently throttle to whatever we picked, which is exactly the bug nobody wants to find. Let the consumer be explicit.
+
+### Setting up `throttledFn`
+
+Stripping the outer factory for the moment, the inner shape is the same `fn` -> `throttler` -> `throttledFn` chain. The interesting question is what the body looks like. We have two things to coordinate now: the leading edge (fire immediately if the interval has elapsed) and the trailing edge (if calls keep arriving inside the interval, schedule one final call at the end so we do not lose the last event).
+
+A first cut, leading-only:
+
+```js
+    return function throttler(fn) {
+        let lastRun = 0
+        return function throttledFn(...args) {
+            const now = Date.now()
+            if (now - lastRun >= interval) {
+                lastRun = now
+                fn(...args)
+            }
+        }
+    }
+```
+
+This is the timestamp version from before, dressed up in a closure. Reusable, finally, but it still has the trailing-edge bug we already noted. Let's add the trailing call.
+
+```js
+    return function throttler(fn) {
+        let lastRun = 0
+        let timer
+        return function throttledFn(...args) {
+            const now = Date.now()
+            const elapsed = now - lastRun
+
+            if (elapsed >= interval) {
+                lastRun = now
+                fn(...args)
+                return
+            }
+
+            if (!timer) {
+                timer = setTimeout(() => {
+                    lastRun = Date.now()
+                    timer = null
+                    fn(...args)
+                }, interval - elapsed)
+            }
+        }
+    }
+```
+
+If enough time has passed, we fire immediately. Otherwise, we schedule a single trailing call to land exactly when the current interval is up. The `if (!timer)` guard is doing real work here: without it, every event inside the interval would queue its own trailing timer, and we would be back where we started. With it, the first call inside the interval books the trailing slot, and every subsequent call just updates… well, nothing yet, which is the next bug. The trailing call closes over `args` from the first event in the burst, not the latest. For a scroll bar, that means the bar would happily render a position the user scrolled past 90 ms ago, which defeats the purpose. We will fix this when we extract `run`. First, the usual house-keeping.
+
+### Forwarding `this` and supporting cancel
+
+A throttled function inherits all the same `this` and "what if `fn` is not a function" headaches as a debounced one. The reasoning is identical, so I will not re-litigate it here; if you want the long version, the [debouncer post](/blog/lets-design-a-debouncer-in-javascript) covers it. The short version: we type-check `fn` upfront, use `apply` to forward `this`, and accept that arrow-function `fn`s will ignore the forwarded `this` and use their lexical scope instead. We also want a `cancel` method that drops any pending trailing call without invoking it.
+
+```js
+    return function throttler(fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        let lastRun = 0
+        let timer
+
+        function clearTimer() {
+            if (!timer) {
+                return
+            }
+            clearTimeout(timer)
+            timer = null
+        }
+
+        const throttledFn = function (...args) {
+            const now = Date.now()
+            const elapsed = now - lastRun
+
+            if (elapsed >= interval) {
+                clearTimer()
+                lastRun = now
+                fn.apply(this, args)
+                return
+            }
+
+            if (!timer) {
+                timer = setTimeout(() => {
+                    lastRun = Date.now()
+                    timer = null
+                    fn.apply(this, args)
+                }, interval - elapsed)
+            }
+        }
+
+        throttledFn.cancel = function () {
+            clearTimer()
+        }
+
+        return throttledFn
+    }
+```
+
+Two things worth pointing out. First, on the leading edge we now `clearTimer` before invoking, because the leading call effectively replaces any pending trailing call: there is no point firing twice in a row at the same instant. Second, the trailing-call closure still captures `this` and `args` from whichever event first scheduled the timer, which is the bug we owe a fix for.
+
+### Extracting `run` and capturing the latest call
+
+The fix is the same trick the debouncer post used: pull the call site into its own function, and let every invocation of `throttledFn` update closure-scoped `ctx` and `args` so that whoever runs next acts on the most recent values.
+
+```js
+    return function throttler(fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        let ctx
+        let args
+        let timer
+        let lastRun = 0
+
+        function clearTimer() {
+            if (!timer) {
+                return false
+            }
+            clearTimeout(timer)
+            timer = null
+            return true
+        }
+
+        function run() {
+            lastRun = Date.now()
+            fn.apply(ctx, args)
+            args = null
+            ctx = null
+            timer = null
+        }
+
+        const throttledFn = function (..._args) {
+            ctx = this
+            args = _args
+            const now = Date.now()
+            const elapsed = now - lastRun
+
+            if (elapsed >= interval) {
+                clearTimer()
+                run()
+                return
+            }
+
+            if (!timer) {
+                timer = setTimeout(run, interval - elapsed)
+            }
+        }
+
+        throttledFn.cancel = function () {
+            clearTimer()
+        }
+
+        return throttledFn
+    }
+```
+
+Now the trailing call always uses the most recent `ctx` and `args`, because every call to `throttledFn` overwrites them. The scroll bar will land on the position from the last scroll event in the burst, not the first. `clearTimer` also returns a boolean now, in anticipation of the next bit.
+
+### Adding `flush`
+
+`flush` means: if there is a pending trailing call, fire it now instead of waiting for the timer.
+
+```js
+        throttledFn.flush = function () {
+            if (clearTimer()) {
+                run()
+            }
+        }
+```
+
+Same semantics as the debouncer's `flush`. We only run if there was actually something pending; flushing nothing would cheerfully invoke `fn` with whatever stale `args` we had lying around, which is exactly the kind of bug that surfaces on a Tuesday morning during a demo.
+
+### Caching with `WeakMap`
+
+The final issue is one we have seen before. If a consumer calls `throttler(fn)` multiple times with the same `fn`, perhaps inside a loop or a React render, each call sets up a fresh closure with its own `lastRun` and `timer`, and we end up with two throttlers sharing none of the state that makes throttling work. The fix is identical to the debouncer's: cache the throttled wrapper keyed by `fn`, and use a `WeakMap` so we do not keep `fn` alive past its natural lifetime.
+
+```js
+function createThrottler(opts) {
+    function isFinitePositive(v) {
+        return (typeof v === 'number' && !Number.isNaN(v) && Number.isFinite(v) && v > 0)
+    }
+
+    const interval = opts?.interval
+
+    if (!isFinitePositive(interval)) {
+        throw new Error("interval must be a positive number in milliseconds")
+    }
+
+    let cache = new WeakMap()
+
+    const throttler = function (fn) {
+        if (typeof fn !== 'function') {
+            throw new Error("fn must be a function")
+        }
+
+        const cachedFn = cache.get(fn)
+        if (cachedFn) {
+            return cachedFn
+        }
+
+        let ctx
+        let args
+        let timer
+        let lastRun = 0
+
+        function clearTimer() {
+            if (!timer) {
+                return false
+            }
+            clearTimeout(timer)
+            timer = null
+            return true
+        }
+
+        function run() {
+            lastRun = Date.now()
+            fn.apply(ctx, args)
+            args = null
+            ctx = null
+            timer = null
+        }
+
+        const throttledFn = function (..._args) {
+            ctx = this
+            args = _args
+            const now = Date.now()
+            const elapsed = now - lastRun
+
+            if (elapsed >= interval) {
+                clearTimer()
+                run()
+                return
+            }
+
+            if (!timer) {
+                timer = setTimeout(run, interval - elapsed)
+            }
+        }
+
+        throttledFn.cancel = function () {
+            clearTimer()
+        }
+
+        throttledFn.flush = function () {
+            if (clearTimer()) {
+                run()
+            }
+        }
+
+        cache.set(fn, throttledFn)
+
+        return throttledFn
+    }
+
+    throttler.clearCache = function () {
+        cache = new WeakMap()
+    }
+
+    return throttler
+}
+```
+
+`WeakMap` keys are held weakly, so once the consumer drops their reference to `fn`, both the cache entry and the `throttledFn` closure attached to it become eligible for garbage collection. The same caveats from the debouncer apply: the cache only helps when `fn` is referentially stable, so in React you want `useCallback` or a hoisted function rather than a fresh arrow on every render, and `fn.bind(obj)` produces a different reference on each call so the cache will not save you there.
+
+A consumer site looks like this:
+
+```js
+    const throttler = createThrottler({ interval: 100 })
+
+    function updateProgressBar() {
+        const scrolled = window.scrollY
+        const max = document.documentElement.scrollHeight - window.innerHeight
+        bar.style.width = `${(scrolled / max) * 100}%`
+    }
+
+    const throttledUpdate = throttler(updateProgressBar)
+    window.addEventListener('scroll', throttledUpdate)
+```
+
+And there it is. A throttler that fires on the leading edge, follows up on the trailing edge with the latest arguments, can be cancelled or flushed on demand, and will not silently double itself when the consumer asks, politely, for the same throttler twice. As with the debouncer, this is good enough for most cases, but if you find yourself wanting leading-only or trailing-only modes, custom scheduling (`requestAnimationFrame` instead of `setTimeout`, which is genuinely a better fit for this scroll example), or precise lodash-compatible semantics, reach for the library. Some wheels are worth not reinventing, especially the round ones.

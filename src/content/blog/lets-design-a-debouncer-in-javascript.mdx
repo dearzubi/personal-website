@@ -59,7 +59,7 @@ searchInput.addEventListener('input', (e) => {
 });
 ```
 
-Now, on each keystroke, we first clear the previous timer and then initiate a new one. Clearing a timer means the corresponding API call will never occur if the timer was still pending. That right there is the core idea of a debouncer. **Debounce essentially means taking a burst of events and reacting only to the latest one after some time has passed.** In this case, we take a burst of typing inputs and react only to the last keystroke after a set time (1000 ms = 1 sec in our example) when the user stops typing. All intermediate keystroke events are basically cancelled. This works, but it's not good enough:
+Now, on each keystroke, we first clear the previous timer and then initiate a new one. Clearing a timer means the corresponding API call will never occur if the timer was still pending. That right there is the core idea of a debouncer. **Debounce essentially means taking a burst of events and reacting only to the latest one after some time has passed at the end of the burst, while cancelling the reaction to the previous ones.** In this case, we take a burst of typing inputs and react only to the last keystroke after a set time (1000 ms = 1 sec in our example) when the user stops typing. All intermediate keystroke events are basically cancelled. This works, but it's not good enough:
 
 - Not reusable. What if we need to debounce something else?
 - What if we want to cancel the last timer (or API call)?
@@ -116,7 +116,7 @@ function createDebouncer(opts) {
 }
 ```
 
-We ensured that `timeout` must be present, and `maxWait` can optionally be present. Both should be finite and positive numbers in milliseconds. We are throwing errors if validation fails. One can argue to use defaults, but I am not in favour of that. Defaults here can swallow an actual bug in the code, and can make debugging a nightmare. Additionally, we could set `maxWait` to a default value, ensuring that a debounced function invocation is never delayed indefinitely, but we will let the consumer decide what's best for their use case.
+We ensured that `timeout` must be present, and `maxWait` can optionally be present. Both should be finite and positive numbers in milliseconds. We are throwing errors if validation fails. One can argue to use defaults, but I am not in favour of that. A default will happily accept a typo like `timeoutMs: 500`, silently fall back to whatever we picked, and turn into the kind of debugging nightmare you remember, fondly, years later. Additionally, we could set `maxWait` to a default value, ensuring that a debounced function invocation is never delayed indefinitely, but we will let the consumer decide what's best for their use case.
 
 ### Setting up `debouncedFn`
 
@@ -161,7 +161,7 @@ You can see this looks very similar to what we did at the very beginning when we
 ### Forwarding `this` and supporting cancel
 
 This code, however, has a few issues. What if `fn` is not a function at all? What if `fn` uses `this` during invocation; what will `this` refer to? How to cancel the timer without invoking `fn`?
-Well, if `fn` is not a function, then it can't be invoked, and JavaScript will throw a `TypeError: fn is not a function` at runtime, and because `setTimeout` is asynchronous, the error will skip any synchronous error handler, which will probably crash the application. Then there is an issue with `this`. During `fn` invocation, if `fn` is a traditional function defined using `function` keyword, then `this` might be `undefined` or the global object, depending on whether your code is running in strict mode or not. `this` could also refer to something entirely different if `fn` is bound to an object with `bind`. If `fn` is an arrow function, then `this` will refer to the lexical scope where the arrow function was defined. You see, there is a lot of uncertainty. Finally, there is no possible way to cancel the timer if we decide not to invoke the delayed `fn`. Let's fix these issues:
+Well, if `fn` is not a function, then it can't be invoked, and JavaScript will throw a `TypeError: fn is not a function` at runtime, and because `setTimeout` is asynchronous, the error will skip any synchronous error handler, which will probably crash the application. Then there is an issue with `this`. During `fn` invocation, if `fn` is a traditional function defined using `function` keyword, then `this` might be `undefined` or the global object, depending on whether your code is running in strict mode or not. `this` could also refer to something entirely different if `fn` is bound to an object with `bind`. If `fn` is an arrow function, then `this` will refer to the lexical scope where the arrow function was defined. JavaScript has, at minimum, four opinions about what `this` should be in this exact spot, and most of them are wrong for any given consumer. Finally, there is no possible way to cancel the timer if we decide not to invoke the delayed `fn`. Let's fix these issues:
 
 
 ```js
@@ -231,7 +231,7 @@ Going back to our debouncer, you must have noticed that we extracted the timer-c
 
 ### Adding `maxWait`
 
-Our debouncer is already looking pretty good now, but what about `maxWait`? Remember, this is a safeguard against an indefinitely delayed function invocation. For example, imagine a fast stream of events. We use a debounced function to batch events and send them to an API, but if events keep coming in, and we keep cancelling the latest debounce timer, we might delay the invocation indefinitely. If something crashes the app, we might lose all the events received so far. There is, however, a better solution for this using a throttler, but for the sake of this blog post, assume we want to achieve it with a debouncer. That's where `maxWait` comes in handy. It caps how long the current burst of calls can keep pushing the invocation back. If the burst has been going on for at least `maxWait` ms when a new call comes in, we invoke `fn` immediately instead of resetting the timer yet again. The effect is that `fn` fires at most once every `maxWait` ms, no matter how relentless the burst is. Let's handle this:
+Our debouncer is already looking pretty good now, but what about `maxWait`? Remember, this is a safeguard against an indefinitely delayed function invocation. For example, imagine a fast stream of events. We use a debounced function to batch events and send them to an API, but if events keep arriving (and they will, that is rather the point of a burst), and we keep cancelling the latest debounce timer, we might delay the invocation indefinitely. If something crashes the app, we might lose all the events received so far. There is, however, a better solution for this using a throttler, but for the sake of this blog post, assume we want to achieve it with a debouncer. That's where `maxWait` comes in handy. It caps how long the current burst of calls can keep pushing the invocation back. If the burst has been going on for at least `maxWait` ms when a new call comes in, we invoke `fn` immediately instead of resetting the timer yet again. The effect is that `fn` fires at most once every `maxWait` ms, no matter how relentless the burst is. Let's handle this:
 
 ```js
     return function debouncer(fn) {
@@ -389,7 +389,7 @@ Another thing we need to take care of is flushing. Flushing basically means clea
     }
 ```
 
-Just like `cancel`, `flush` is a method on `debouncedFn` object. I've made another small tweak. We only call `run` inside `flush` if there was a pending `timer` that we first cleared. If there were no pending `timer`, calling `run` would not make sense, as it does not adhere to the idea of flushing. Our debouncer is pretty much ready. Let's see how a consumer can utilise it.
+Just like `cancel`, `flush` is a method on `debouncedFn` object. I've made another small tweak. We only call `run` inside `flush` if there was a pending `timer` that we first cleared. If there were no pending `timer`, calling `run` would not make sense; flushing nothing is not flushing, it is just calling `fn` with whatever stale arguments happen to be lying around in scope, which is a bug, not a feature. Our debouncer is pretty much ready. Let's see how a consumer can utilise it.
 
 ```js
     const debouncer = createDebouncer({
@@ -520,6 +520,6 @@ While we are at it, there is another tiny gotcha you need to be aware of. Callin
     // debouncedFn1 !== debouncedFn2 because fn.bind(obj) !== fn.bind(obj)
 ```
 
-Even though `fn` is the same and is bound to the same object. The reference is different in both cases, and the cache won't help you there.
+Even though `fn` is the same and is bound to the same object. The reference is different in both cases, and the cache, sadly, will not save you here.
 
-Finally, there you have it. Your very own debouncer. Again, this is a good-enough debouncer, which is okay for most cases, but I recommend using a battle-tested solution like one from Lodash. For example, there are a few more specialised cases that we did not handle, including the leading/trailing mode switch.
+Finally, there you have it. Your very own debouncer. Again, this is a good-enough debouncer, which is okay for most cases, but I recommend using a battle-tested solution like one from Lodash. There are a few more specialised cases we did not handle, including the leading/trailing mode switch, and Lodash has thought about all of them, on a Tuesday many years ago, so that you do not have to.
