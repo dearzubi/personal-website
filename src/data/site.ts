@@ -429,6 +429,14 @@ export type Project = {
 
 export const projects: Project[] = [
   {
+    name: 'Indeed Job Insights',
+    description:
+      'Chrome extension that decorates Indeed listings with driving times, work-mode badges, keyword hits, and employer insights so you can triage postings without opening every card.',
+    stack: ['TypeScript', 'Chrome Extension', 'Rolldown', 'Google Maps API', 'Vitest'],
+    image: '/projects/indeed-helper/image_1.png',
+    links: ['https://github.com/dearzubi/indeed-job-insights'],
+  },
+  {
     name: 'FloAgenticAI',
     description: 'Visual no-code platform to compose event-driven, multi-agent AI workflows.',
     stack: [

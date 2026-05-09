@@ -110,6 +110,9 @@ export const getSkillIcon = (skillName: string): string => {
     'TanStack React Query': 'logos:react-query-icon',
     'TanStack Router': 'simple-icons:tanstack',
     WebSocket: 'logos:websocket',
+    Rolldown: 'simple-icons:rolldown',
+    'Chrome Extension': 'logos:chrome',
+    'Google Maps API': 'logos:google-maps',
   };
   return iconMap[skillName] ?? 'lucide:code';
 };
